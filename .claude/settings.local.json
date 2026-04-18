@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npx --version)",
+      "Bash(npx create-next-app@latest --help)",
+      "Bash(npm show *)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-turbo --yes)",
+      "Read(//c/dev/Claude/**)",
+      "Bash(npx create-next-app@latest keygenetics --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-turbo --yes)"
+    ]
+  }
+}
