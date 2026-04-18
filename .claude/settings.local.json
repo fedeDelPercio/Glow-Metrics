@@ -7,7 +7,25 @@
       "Bash(npm show *)",
       "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-turbo --yes)",
       "Read(//c/dev/Claude/**)",
-      "Bash(npx create-next-app@latest keygenetics --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-turbo --yes)"
+      "Bash(npx create-next-app@latest keygenetics --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-turbo --yes)",
+      "Bash(npm install *)",
+      "Bash(npx shadcn@latest init --yes --base-color neutral)",
+      "Bash(npx shadcn@latest init --yes)",
+      "Bash(npx shadcn@latest init --defaults)",
+      "Bash(npx shadcn@latest add button input label card badge select textarea sheet skeleton tabs avatar separator --yes)",
+      "Bash(npx shadcn@latest add form toast sonner dialog dropdown-menu --yes)",
+      "Bash(npx shadcn@latest add form sonner dialog dropdown-menu --yes)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "mcp__claude_ai_Supabase__list_tables",
+      "mcp__claude_ai_Supabase__get_logs",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "Bash(python3 -c \"print\\(open\\('C:/Users/Usuario/.claude/projects/c--dev-Claude-Keygenetics/3fc8e85a-0854-4556-8c8a-e01647ee14e3/tool-results/mcp-claude_ai_Supabase-get_logs-1776483250210.txt'\\).read\\(\\)[0:80000]\\)\")",
+      "Bash(powershell -Command \"Get-Content 'C:/Users/Usuario/.claude/projects/c--dev-Claude-Keygenetics/3fc8e85a-0854-4556-8c8a-e01647ee14e3/tool-results/mcp-claude_ai_Supabase-get_logs-1776483250210.txt'\")",
+      "Bash(Select-String -Pattern '\"POST\"')",
+      "Bash(Select-Object -First 20)",
+      "Bash(git add *)"
     ]
   }
 }
