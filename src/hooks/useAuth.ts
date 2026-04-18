@@ -10,6 +10,7 @@ type AuthContextValue = {
   profile: Profile | null
   loading: boolean
   signInWithMagicLink: (email: string) => Promise<{ error: unknown }>
+  signInWithPassword: (email: string, password: string) => Promise<{ error: unknown }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
 }
@@ -75,6 +76,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error }
   }
 
+  const signInWithPassword = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    return { error }
+  }
+
   const signOut = async () => {
     await supabase.auth.signOut()
   }
@@ -85,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return createElement(
     AuthContext.Provider,
-    { value: { user, profile, loading, signInWithMagicLink, signOut, refreshProfile } },
+    { value: { user, profile, loading, signInWithMagicLink, signInWithPassword, signOut, refreshProfile } },
     children
   )
 }
@@ -100,6 +106,7 @@ export function useAuth() {
       profile: null,
       loading: false,
       signInWithMagicLink: async () => ({ error: new Error("AuthProvider missing") }),
+      signInWithPassword: async () => ({ error: new Error("AuthProvider missing") }),
       signOut: async () => {},
       refreshProfile: async () => {},
     } as AuthContextValue

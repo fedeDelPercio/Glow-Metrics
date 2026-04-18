@@ -5,68 +5,46 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
+import { Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/hooks/useAuth"
+import { useRouter } from "next/navigation"
 
 const Schema = z.object({
   email: z.string().email("Email inválido"),
+  password: z.string().min(6, "Mínimo 6 caracteres"),
 })
 
 type FormValues = z.infer<typeof Schema>
 
 export default function LoginPage() {
-  const { signInWithMagicLink } = useAuth()
-  const [sent, setSent] = useState(false)
+  const { signInWithPassword } = useAuth()
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
-  const { register, handleSubmit, getValues, formState: { errors } } = useForm<FormValues>({
-    resolver: zodResolver(Schema),
+  const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
+    resolver: zodResolver(Schema) as never,
   })
 
   const onSubmit = async (values: FormValues) => {
     setLoading(true)
-    const { error } = await signInWithMagicLink(values.email)
+    const { error } = await signInWithPassword(values.email, values.password)
     setLoading(false)
     if (error) {
-      toast.error("No pudimos enviar el link. Revisá el email e intentá de nuevo.")
+      toast.error("Email o contraseña incorrectos")
       return
     }
-    setSent(true)
-  }
-
-  if (sent) {
-    return (
-      <div className="space-y-4 text-center">
-        <div className="text-4xl">✉️</div>
-        <h2 className="text-lg font-medium text-[#0A0A0A]">Revisá tu email</h2>
-        <p className="text-sm text-[#737373]">
-          Enviamos un link de acceso a{" "}
-          <span className="text-[#0A0A0A] font-medium">{getValues("email")}</span>.
-          Hacé click en el link para ingresar.
-        </p>
-        <p className="text-xs text-[#A3A3A3]">
-          Si no lo ves, revisá la carpeta de spam.
-        </p>
-        <Button
-          variant="ghost"
-          className="text-sm text-[#737373]"
-          onClick={() => setSent(false)}
-        >
-          Usar otro email
-        </Button>
-      </div>
-    )
+    router.push("/")
   }
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-medium text-[#0A0A0A]">Ingresar a GlowMetrics</h2>
-        <p className="text-sm text-[#737373] mt-1">
-          Te enviamos un link mágico a tu email — sin contraseñas.
-        </p>
+        <p className="text-sm text-[#737373] mt-1">Ingresá tu email y contraseña.</p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -88,14 +66,36 @@ export default function LoginPage() {
           )}
         </div>
 
+        <div className="space-y-1.5">
+          <Label htmlFor="password" className="text-xs uppercase tracking-wide text-[#737373]">
+            Contraseña
+          </Label>
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              className="h-11 pr-10"
+              {...register("password")}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A3A3A3] hover:text-[#525252]"
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+          {errors.password && (
+            <p className="text-xs text-[#DC2626]">{errors.password.message}</p>
+          )}
+        </div>
+
         <Button type="submit" className="w-full h-11" disabled={loading}>
-          {loading ? "Enviando..." : "Enviar link de acceso"}
+          {loading ? "Ingresando..." : "Ingresar"}
         </Button>
       </form>
-
-      <p className="text-center text-xs text-[#A3A3A3]">
-        Si es tu primera vez, tu cuenta se crea automáticamente.
-      </p>
     </div>
   )
 }
