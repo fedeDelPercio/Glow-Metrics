@@ -14,7 +14,18 @@ export function createClient() {
   if (!globalThis.__supabase_browser_client__) {
     globalThis.__supabase_browser_client__ = createBrowserClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          // Disable navigator.locks-based synchronization. Supabase JS v2 uses
+          // navigator.locks.request() to serialize auth state across tabs, but
+          // a stale lock from a previous page (tab closed mid-op, SW, iframe)
+          // leaves every auth call hanging forever — queries "silently never
+          // fire". Replacing it with a no-op is safe for single-tab use and
+          // unblocks all calls.
+          lock: async <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>) => fn(),
+        },
+      }
     )
   }
   return globalThis.__supabase_browser_client__
