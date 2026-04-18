@@ -7,6 +7,7 @@ import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PurchaseSchema, type PurchaseFormValues } from "@/types/forms"
@@ -74,12 +75,9 @@ export function PurchaseForm({ onSubmit }: PurchaseFormProps) {
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs uppercase tracking-wide text-[#737373]">Precio unitario *</Label>
-          <Input
-            type="number"
-            inputMode="numeric"
-            placeholder="0"
-            className="h-11"
-            {...form.register("unit_price", { valueAsNumber: true })}
+          <CurrencyInput
+            value={form.watch("unit_price") ?? 0}
+            onChange={(v) => form.setValue("unit_price", v, { shouldValidate: true })}
           />
         </div>
       </div>

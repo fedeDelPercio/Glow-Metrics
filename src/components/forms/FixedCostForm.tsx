@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { FixedCostSchema, type FixedCostFormValues } from "@/types/forms"
 import { FIXED_COST_CATEGORIES, FIXED_COST_FREQUENCIES } from "@/lib/utils/constants"
@@ -67,12 +68,9 @@ export function FixedCostForm({ defaultValues, onSubmit }: FixedCostFormProps) {
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label className="text-xs uppercase tracking-wide text-[#737373]">Monto *</Label>
-          <Input
-            type="number"
-            inputMode="numeric"
-            placeholder="0"
-            className="h-11"
-            {...form.register("amount", { valueAsNumber: true })}
+          <CurrencyInput
+            value={form.watch("amount") ?? 0}
+            onChange={(v) => form.setValue("amount", v, { shouldValidate: true })}
           />
           {form.formState.errors.amount && (
             <p className="text-xs text-[#DC2626]">{form.formState.errors.amount.message}</p>

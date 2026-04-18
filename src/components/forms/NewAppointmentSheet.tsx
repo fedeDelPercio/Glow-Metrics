@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import {
   Select,
   SelectContent,
@@ -268,12 +269,10 @@ export function NewAppointmentSheet({ open, onOpenChange, defaultDate }: NewAppo
             {/* Precio cobrado */}
             <div className="space-y-1.5">
               <Label className="text-xs uppercase tracking-wide text-[#737373]">Precio cobrado (opcional)</Label>
-              <Input
-                type="number"
-                inputMode="numeric"
-                placeholder="Dejar vacío para usar el precio del servicio"
-                className="h-11"
-                {...form.register("price_charged", { setValueAs: (v) => v === "" ? null : Number(v) })}
+              <CurrencyInput
+                value={form.watch("price_charged") ?? 0}
+                onChange={(v) => form.setValue("price_charged", v === 0 ? null : v)}
+                placeholder="Precio del servicio por defecto"
               />
             </div>
 

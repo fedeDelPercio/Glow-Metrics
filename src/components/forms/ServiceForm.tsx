@@ -7,6 +7,7 @@ import { Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { ServiceSchema, type ServiceFormValues, type ServiceSupplyFormValues } from "@/types/forms"
@@ -79,12 +80,9 @@ export function ServiceForm({ defaultValues, categories, onSubmit }: ServiceForm
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label className="text-xs uppercase tracking-wide text-[#737373]">Precio *</Label>
-          <Input
-            type="number"
-            inputMode="numeric"
-            placeholder="0"
-            className="h-11"
-            {...form.register("price", { valueAsNumber: true })}
+          <CurrencyInput
+            value={form.watch("price") ?? 0}
+            onChange={(v) => form.setValue("price", v, { shouldValidate: true })}
           />
           {form.formState.errors.price && (
             <p className="text-xs text-[#DC2626]">{form.formState.errors.price.message}</p>
