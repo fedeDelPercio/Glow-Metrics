@@ -28,6 +28,7 @@ export function useFixedCosts() {
       const { data } = await supabase
         .from("fixed_costs")
         .select("*")
+        .eq("user_id", session.user.id)
         .is("deleted_at", null)
         .eq("is_active", true)
         .order("category", { ascending: true })

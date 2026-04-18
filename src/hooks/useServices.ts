@@ -31,6 +31,7 @@ export function useServices() {
           service_categories(*),
           service_supplies(*, supply_catalog(name, unit))
         `)
+        .eq("user_id", session.user.id)
         .is("deleted_at", null)
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true })

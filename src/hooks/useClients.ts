@@ -25,6 +25,7 @@ export function useClients(search?: string) {
       let query = supabase
         .from("clients")
         .select("*")
+        .eq("user_id", session.user.id)
         .is("deleted_at", null)
         .order("full_name", { ascending: true })
         .range(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE - 1)

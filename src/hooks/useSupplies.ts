@@ -21,6 +21,7 @@ export function useSupplies() {
       const { data } = await supabase
         .from("supply_catalog")
         .select("*")
+        .eq("user_id", session.user.id)
         .is("deleted_at", null)
         .order("name", { ascending: true })
       setSupplies(data ?? [])

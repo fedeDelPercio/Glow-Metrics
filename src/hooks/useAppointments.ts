@@ -42,6 +42,7 @@ export function useAppointments(dateOrRange?: Date | { from: Date; to: Date }) {
           clients(id, full_name, phone),
           services(id, name, price, duration_minutes)
         `)
+        .eq("user_id", session.user.id)
         .is("deleted_at", null)
         .order("date", { ascending: true })
         .order("start_time", { ascending: true })

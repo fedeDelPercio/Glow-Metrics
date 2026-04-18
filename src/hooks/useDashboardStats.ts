@@ -45,20 +45,22 @@ export function useDashboardStats(referenceDate = new Date()) {
         supabase
           .from("appointments")
           .select("*, services(id, name, price, duration_minutes)")
+          .eq("user_id", session.user.id)
           .is("deleted_at", null)
           .gte("date", format(periodStart, "yyyy-MM-dd"))
           .lte("date", format(periodEnd, "yyyy-MM-dd")),
         supabase
           .from("appointments")
           .select("price_charged, status")
+          .eq("user_id", session.user.id)
           .is("deleted_at", null)
           .gte("date", format(prevStart, "yyyy-MM-dd"))
           .lte("date", format(prevEnd, "yyyy-MM-dd"))
           .eq("status", "completed"),
-        supabase.from("services").select("*").is("deleted_at", null),
+        supabase.from("services").select("*").eq("user_id", session.user.id).is("deleted_at", null),
         supabase.from("service_supplies").select("*, supply_catalog(current_stock, unit)"),
-        supabase.from("supply_purchases").select("*").is("deleted_at", null),
-        supabase.from("fixed_costs").select("*").is("deleted_at", null).eq("is_active", true),
+        supabase.from("supply_purchases").select("*").eq("user_id", session.user.id).is("deleted_at", null),
+        supabase.from("fixed_costs").select("*").eq("user_id", session.user.id).is("deleted_at", null).eq("is_active", true),
       ])
 
       const completed = (appointments ?? []).filter((a) => a.status === "completed")
