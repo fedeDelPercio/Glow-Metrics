@@ -266,16 +266,6 @@ export function NewAppointmentSheet({ open, onOpenChange, defaultDate }: NewAppo
               </Select>
             </div>
 
-            {/* Precio cobrado */}
-            <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wide text-[#737373]">Precio cobrado (opcional)</Label>
-              <CurrencyInput
-                value={form.watch("price_charged") ?? 0}
-                onChange={(v) => form.setValue("price_charged", v === 0 ? null : v)}
-                placeholder="Precio del servicio por defecto"
-              />
-            </div>
-
             <Button type="submit" className="w-full h-11">
               Guardar turno
             </Button>
