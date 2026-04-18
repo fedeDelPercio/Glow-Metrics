@@ -15,7 +15,8 @@ export function useSupplies() {
   const supabase = createClient()
 
   const fetchSupplies = useCallback(async () => {
-    if (!profile?.id) { setLoading(false); return }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setLoading(false); return }
     try {
       const { data } = await supabase
         .from("supply_catalog")

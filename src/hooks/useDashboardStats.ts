@@ -27,6 +27,8 @@ export function useDashboardStats(referenceDate = new Date()) {
     async function fetchStats() {
       setLoading(true)
       try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) { setLoading(false); return }
       const periodStart = startOfMonth(referenceDate)
       const periodEnd = endOfMonth(referenceDate)
       const prevStart = startOfMonth(subMonths(referenceDate, 1))

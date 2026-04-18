@@ -22,7 +22,8 @@ export function useFixedCosts() {
   const supabase = createClient()
 
   const fetchCosts = useCallback(async () => {
-    if (!profile?.id) { setLoading(false); return }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setLoading(false); return }
     try {
       const { data } = await supabase
         .from("fixed_costs")

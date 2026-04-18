@@ -32,7 +32,8 @@ export function useAppointments(dateOrRange?: Date | { from: Date; to: Date }) {
   }
 
   const fetchAppointments = useCallback(async () => {
-    if (!profile?.id) { setLoading(false); return }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setLoading(false); return }
     try {
       let query = supabase
         .from("appointments")

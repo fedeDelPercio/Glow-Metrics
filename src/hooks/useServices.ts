@@ -21,7 +21,8 @@ export function useServices() {
   const supabase = createClient()
 
   const fetchServices = useCallback(async () => {
-    if (!profile?.id) { setLoading(false); return }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setLoading(false); return }
     try {
       const { data, error } = await supabase
         .from("services")

@@ -18,7 +18,8 @@ export function useClients(search?: string) {
   const supabase = createClient()
 
   const fetchClients = useCallback(async (reset = false) => {
-    if (!profile?.id) { setLoading(false); return }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) { setLoading(false); return }
     try {
       const currentPage = reset ? 0 : page
       let query = supabase
