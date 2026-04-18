@@ -74,8 +74,7 @@ export default function OnboardingPage() {
     }
 
     await refreshProfile()
-    router.push("/")
-    router.refresh()
+    window.location.href = "/"
   }
 
   return (
