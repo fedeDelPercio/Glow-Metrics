@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { format } from "date-fns"
+import { useAuth } from "@/hooks/useAuth"
 import { useVisibilityRefetch, useLoadingTimeout, useGlobalRefresh } from "@/hooks/useVisibilityRefetch"
 import type { Appointment, Client, Service } from "@/types/database"
 import type { AppointmentFormValues } from "@/types/forms"
@@ -14,6 +15,7 @@ export type AppointmentWithDetails = Appointment & {
 }
 
 export function useAppointments(dateOrRange?: Date | { from: Date; to: Date }) {
+  const { profile } = useAuth()
   const [appointments, setAppointments] = useState<AppointmentWithDetails[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
@@ -30,6 +32,7 @@ export function useAppointments(dateOrRange?: Date | { from: Date; to: Date }) {
   }
 
   const fetchAppointments = useCallback(async () => {
+    if (!profile?.id) { setLoading(false); return }
     try {
       let query = supabase
         .from("appointments")
@@ -58,7 +61,7 @@ export function useAppointments(dateOrRange?: Date | { from: Date; to: Date }) {
     } finally {
       setLoading(false)
     }
-  }, [supabase, fromKey, toKey])
+  }, [supabase, fromKey, toKey, profile?.id])
 
   useEffect(() => {
     setLoading(true)

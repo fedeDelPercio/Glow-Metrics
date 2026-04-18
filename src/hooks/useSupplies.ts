@@ -3,16 +3,19 @@
 import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import { useAuth } from "@/hooks/useAuth"
 import { useVisibilityRefetch, useLoadingTimeout, useGlobalRefresh } from "@/hooks/useVisibilityRefetch"
 import type { SupplyCatalog, SupplyPurchase } from "@/types/database"
 import type { SupplyFormValues, PurchaseFormValues } from "@/types/forms"
 
 export function useSupplies() {
+  const { profile } = useAuth()
   const [supplies, setSupplies] = useState<SupplyCatalog[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
   const fetchSupplies = useCallback(async () => {
+    if (!profile?.id) { setLoading(false); return }
     try {
       const { data } = await supabase
         .from("supply_catalog")
@@ -23,7 +26,7 @@ export function useSupplies() {
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [supabase, profile?.id])
 
   useEffect(() => {
     fetchSupplies()

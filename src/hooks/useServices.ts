@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import { useAuth } from "@/hooks/useAuth"
 import { useVisibilityRefetch, useLoadingTimeout, useGlobalRefresh } from "@/hooks/useVisibilityRefetch"
 import type { Service, ServiceCategory, ServiceSupply } from "@/types/database"
 import type { ServiceFormValues, ServiceSupplyFormValues } from "@/types/forms"
@@ -13,12 +14,14 @@ export type ServiceWithCategory = Service & {
 }
 
 export function useServices() {
+  const { profile } = useAuth()
   const [services, setServices] = useState<ServiceWithCategory[]>([])
   const [categories, setCategories] = useState<ServiceCategory[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
   const fetchServices = useCallback(async () => {
+    if (!profile?.id) { setLoading(false); return }
     try {
       const { data, error } = await supabase
         .from("services")
@@ -36,7 +39,7 @@ export function useServices() {
     } catch {
       toast.error("Fallo al cargar servicios")
     }
-  }, [supabase])
+  }, [supabase, profile?.id])
 
   const fetchCategories = useCallback(async () => {
     const { data } = await supabase

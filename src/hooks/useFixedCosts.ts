@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import { useAuth } from "@/hooks/useAuth"
 import { useVisibilityRefetch, useLoadingTimeout, useGlobalRefresh } from "@/hooks/useVisibilityRefetch"
 import type { FixedCost } from "@/types/database"
 import type { FixedCostFormValues } from "@/types/forms"
@@ -15,11 +16,13 @@ const MONTHLY_MULTIPLIERS: Record<string, number> = {
 }
 
 export function useFixedCosts() {
+  const { profile } = useAuth()
   const [costs, setCosts] = useState<FixedCost[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
   const fetchCosts = useCallback(async () => {
+    if (!profile?.id) { setLoading(false); return }
     try {
       const { data } = await supabase
         .from("fixed_costs")
@@ -32,7 +35,7 @@ export function useFixedCosts() {
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [supabase, profile?.id])
 
   useEffect(() => {
     fetchCosts()

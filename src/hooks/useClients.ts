@@ -3,12 +3,14 @@
 import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import { useAuth } from "@/hooks/useAuth"
 import { useVisibilityRefetch, useLoadingTimeout, useGlobalRefresh } from "@/hooks/useVisibilityRefetch"
 import type { Client } from "@/types/database"
 import type { ClientFormValues } from "@/types/forms"
 import { ITEMS_PER_PAGE } from "@/lib/utils/constants"
 
 export function useClients(search?: string) {
+  const { profile } = useAuth()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [hasMore, setHasMore] = useState(false)
@@ -16,6 +18,7 @@ export function useClients(search?: string) {
   const supabase = createClient()
 
   const fetchClients = useCallback(async (reset = false) => {
+    if (!profile?.id) { setLoading(false); return }
     try {
       const currentPage = reset ? 0 : page
       let query = supabase
@@ -46,7 +49,7 @@ export function useClients(search?: string) {
     } finally {
       setLoading(false)
     }
-  }, [supabase, page, search])
+  }, [supabase, page, search, profile?.id])
 
   useEffect(() => {
     setLoading(true)
