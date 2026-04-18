@@ -295,21 +295,19 @@ function TimeGridView({
                   const topMin = (hh - HOUR_START) * 60 + mm
                   const top = (topMin / 60) * PX_PER_HOUR + 1
                   const durationMin = appt.services?.duration_minutes ?? 60
-                  const canAct = appt.status === "reserved" || appt.status === "confirmed"
-                  const minHeight = !isWeek && canAct ? 100 : 24
-                  const height = Math.max((durationMin / 60) * PX_PER_HOUR - 2, minHeight)
+                  const height = Math.max((durationMin / 60) * PX_PER_HOUR - 2, 24)
                   const gridColor = GRID_COLORS[appt.status] ?? GRID_COLORS.reserved
 
                   return (
                     <div
                       key={appt.id}
-                      className="absolute inset-x-0.5 rounded-lg overflow-hidden"
-                      style={{ top, height }}
+                      className="absolute inset-x-0.5 rounded-lg"
+                      style={{ top, height, zIndex: 10 }}
                     >
                       {isWeek ? (
                         <button
                           onClick={() => onDayClick(day)}
-                          className={cn("w-full h-full px-1.5 py-1 text-left rounded-lg", gridColor)}
+                          className={cn("w-full h-full px-1.5 py-1 text-left rounded-lg overflow-hidden", gridColor)}
                         >
                           <p className="text-[10px] font-medium leading-tight truncate">
                             {appt.clients?.full_name ?? "Sin clienta"}
@@ -351,55 +349,74 @@ function DayApptBlock({
   gridColor: string
   onStatusChange: (id: string, status: AppointmentStatus) => void
 }) {
+  const [expanded, setExpanded] = useState(false)
   const statusInfo = APPOINTMENT_STATUSES[appt.status as AppointmentStatus] ?? APPOINTMENT_STATUSES.reserved
   const canAct = appt.status === "reserved" || appt.status === "confirmed"
 
   return (
-    <div className={cn("w-full h-full px-2 py-1.5 rounded-lg flex flex-col overflow-hidden", gridColor)}>
-      <div className="flex items-start justify-between gap-1 min-w-0">
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold leading-tight truncate">
-            {appt.clients?.full_name ?? "Sin clienta"}
-          </p>
-          {height > 40 && (
-            <p className="text-[10px] leading-tight truncate opacity-70 mt-0.5">
-              {formatTime(appt.start_time)} · {appt.services?.name}
+    <div className="relative h-full" style={{ zIndex: expanded ? 30 : "auto" }}>
+      {/* Appointment block — exact duration height */}
+      <button
+        onClick={() => canAct && setExpanded((v) => !v)}
+        className={cn(
+          "w-full h-full px-2 py-1.5 rounded-lg flex flex-col overflow-hidden text-left",
+          gridColor,
+          canAct && "active:opacity-80"
+        )}
+      >
+        <div className="flex items-start justify-between gap-1 min-w-0 w-full">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold leading-tight truncate">
+              {appt.clients?.full_name ?? "Sin clienta"}
             </p>
-          )}
-          {height > 56 && appt.services?.price != null && (
-            <p className="text-[10px] leading-tight opacity-60 mt-0.5 tabular-nums">
-              {formatCurrency(appt.price_charged ?? appt.services.price)}
-            </p>
-          )}
+            {height > 36 && (
+              <p className="text-[10px] leading-tight truncate opacity-70 mt-0.5">
+                {formatTime(appt.start_time)} · {appt.services?.name}
+              </p>
+            )}
+            {height > 52 && appt.services?.price != null && (
+              <p className="text-[10px] leading-tight opacity-60 mt-0.5 tabular-nums">
+                {formatCurrency(appt.price_charged ?? appt.services.price)}
+              </p>
+            )}
+          </div>
+          <Badge className={cn("text-[9px] px-1.5 py-0 h-4 rounded-full border-0 whitespace-nowrap flex-shrink-0", statusInfo.color)}>
+            {statusInfo.label}
+          </Badge>
         </div>
-        <Badge className={cn("text-[9px] px-1.5 py-0 h-4 rounded-full border-0 whitespace-nowrap flex-shrink-0", statusInfo.color)}>
-          {statusInfo.label}
-        </Badge>
-      </div>
+      </button>
 
-      {canAct && (
-        <div className="flex gap-1 mt-auto pt-1 border-t border-black/10">
-          <button
-            onClick={(e) => { e.stopPropagation(); onStatusChange(appt.id, "completed") }}
-            className="flex-1 text-[10px] font-medium py-1 rounded bg-white/60 hover:bg-white/90 text-[#16A34A] transition-colors"
-          >
-            ✓ Realizado
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onStatusChange(appt.id, "no_show") }}
-            className="flex-1 text-[10px] font-medium py-1 rounded bg-white/60 hover:bg-white/90 text-[#DC2626] transition-colors"
-          >
-            ✗ Ausente
-          </button>
-          {appt.status === "reserved" && (
+      {/* Floating action panel — appears below the block on tap */}
+      {expanded && canAct && (
+        <>
+          {/* Backdrop to close on outside click */}
+          <div
+            className="fixed inset-0 z-20"
+            onClick={() => setExpanded(false)}
+          />
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#E5E5E5] rounded-xl shadow-lg z-30 flex overflow-hidden">
             <button
-              onClick={(e) => { e.stopPropagation(); onStatusChange(appt.id, "confirmed") }}
-              className="flex-1 text-[10px] font-medium py-1 rounded bg-white/60 hover:bg-white/90 text-[#525252] transition-colors"
+              onClick={() => { onStatusChange(appt.id, "completed"); setExpanded(false) }}
+              className="flex-1 text-xs font-medium py-2.5 text-[#16A34A] hover:bg-[#F0FDF4] transition-colors border-r border-[#F0F0F0]"
             >
-              Confirmar
+              ✓ Realizado
             </button>
-          )}
-        </div>
+            <button
+              onClick={() => { onStatusChange(appt.id, "no_show"); setExpanded(false) }}
+              className="flex-1 text-xs font-medium py-2.5 text-[#DC2626] hover:bg-[#FEF2F2] transition-colors border-r border-[#F0F0F0]"
+            >
+              ✗ Ausente
+            </button>
+            {appt.status === "reserved" && (
+              <button
+                onClick={() => { onStatusChange(appt.id, "confirmed"); setExpanded(false) }}
+                className="flex-1 text-xs font-medium py-2.5 text-[#525252] hover:bg-[#F5F5F5] transition-colors"
+              >
+                Confirmar
+              </button>
+            )}
+          </div>
+        </>
       )}
     </div>
   )
