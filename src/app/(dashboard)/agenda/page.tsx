@@ -295,7 +295,9 @@ function TimeGridView({
                   const topMin = (hh - HOUR_START) * 60 + mm
                   const top = (topMin / 60) * PX_PER_HOUR + 1
                   const durationMin = appt.services?.duration_minutes ?? 60
-                  const height = Math.max((durationMin / 60) * PX_PER_HOUR - 2, 24)
+                  const canAct = appt.status === "reserved" || appt.status === "confirmed"
+                  const minHeight = !isWeek && canAct ? 100 : 24
+                  const height = Math.max((durationMin / 60) * PX_PER_HOUR - 2, minHeight)
                   const gridColor = GRID_COLORS[appt.status] ?? GRID_COLORS.reserved
 
                   return (
@@ -375,7 +377,7 @@ function DayApptBlock({
         </Badge>
       </div>
 
-      {canAct && height >= 90 && (
+      {canAct && (
         <div className="flex gap-1 mt-auto pt-1 border-t border-black/10">
           <button
             onClick={(e) => { e.stopPropagation(); onStatusChange(appt.id, "completed") }}
