@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef, useEffect } from "react"
 import {
   format,
   addDays,
@@ -31,6 +31,20 @@ import { NewAppointmentSheet } from "@/components/forms/NewAppointmentSheet"
 import { cn } from "@/lib/utils"
 
 type ViewMode = "day" | "week" | "month"
+
+const HOUR_START = 7
+const HOUR_END = 22
+const TOTAL_HOURS = HOUR_END - HOUR_START
+const PX_PER_HOUR = 64
+
+const GRID_COLORS: Record<string, string> = {
+  reserved:    "bg-[#E5E5E5] text-[#0A0A0A]",
+  confirmed:   "bg-[#0A0A0A] text-white",
+  completed:   "bg-[#DCFCE7] text-[#16A34A]",
+  no_show:     "bg-[#FEE2E2] text-[#DC2626]",
+  cancelled:   "bg-[#F5F5F5] text-[#A3A3A3]",
+  rescheduled: "bg-[#FEF3C7] text-[#D97706]",
+}
 
 export default function AgendaPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("day")
@@ -79,6 +93,11 @@ export default function AgendaPage() {
   }, [viewMode, referenceDate])
 
   const backToTodayLabel = viewMode === "day" ? "Volver a hoy" : viewMode === "week" ? "Esta semana" : "Este mes"
+
+  const weekDays = useMemo(
+    () => eachDayOfInterval({ start: startOfWeek(referenceDate, { weekStartsOn: 1 }), end: endOfWeek(referenceDate, { weekStartsOn: 1 }) }),
+    [referenceDate]
+  )
 
   return (
     <PageContainer>
@@ -130,37 +149,19 @@ export default function AgendaPage() {
         <div className="space-y-2">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
         </div>
-      ) : viewMode === "day" ? (
-        appointments.length === 0 ? (
-          <EmptyState
-            icon={Calendar}
-            title="Sin turnos para este día"
-            description="Tocá el + para agregar un turno"
-            action={{ label: "Nuevo turno", onClick: () => setFabOpen(true) }}
-          />
-        ) : (
-          <div className="space-y-2">
-            {appointments.map((appt) => (
-              <AppointmentCard
-                key={appt.id}
-                appointment={appt}
-                onStatusChange={(status) => updateStatus(appt.id, status)}
-              />
-            ))}
-          </div>
-        )
-      ) : viewMode === "week" ? (
-        <WeekView
-          weekStart={startOfWeek(referenceDate, { weekStartsOn: 1 })}
-          appointments={appointments}
-          onStatusChange={updateStatus}
-          onDayClick={(d) => { setReferenceDate(d); setViewMode("day") }}
-        />
-      ) : (
+      ) : viewMode === "month" ? (
         <MonthView
           monthDate={referenceDate}
           appointments={appointments}
           onDayClick={(d) => { setReferenceDate(d); setViewMode("day") }}
+        />
+      ) : (
+        <TimeGridView
+          days={viewMode === "week" ? weekDays : [referenceDate]}
+          appointments={appointments}
+          onStatusChange={updateStatus}
+          onDayClick={(d) => { setReferenceDate(d); setViewMode("day") }}
+          isWeek={viewMode === "week"}
         />
       )}
 
@@ -197,18 +198,20 @@ function ViewTabs({ value, onChange }: { value: ViewMode; onChange: (v: ViewMode
 
 type ApptWithDetails = ReturnType<typeof useAppointments>["appointments"][number]
 
-function WeekView({
-  weekStart,
+function TimeGridView({
+  days,
   appointments,
   onStatusChange,
   onDayClick,
+  isWeek,
 }: {
-  weekStart: Date
+  days: Date[]
   appointments: ApptWithDetails[]
   onStatusChange: (id: string, status: AppointmentStatus) => void
   onDayClick: (d: Date) => void
+  isWeek: boolean
 }) {
-  const days = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) })
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const byDay = useMemo(() => {
     const map: Record<string, ApptWithDetails[]> = {}
@@ -219,45 +222,183 @@ function WeekView({
     return map
   }, [appointments])
 
+  // Scroll to 8am on mount
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = PX_PER_HOUR * (8 - HOUR_START) - 8
+    }
+  }, [])
+
+  const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => HOUR_START + i)
+
   return (
-    <div className="space-y-3">
-      {days.map((d) => {
-        const key = format(d, "yyyy-MM-dd")
-        const dayAppts = byDay[key] ?? []
-        const dayLabel = format(d, "EEEE d", { locale: es })
-        return (
-          <section key={key}>
-            <button
-              onClick={() => onDayClick(d)}
-              className="flex items-center gap-2 mb-2 group"
-            >
-              <p className={cn(
-                "text-xs uppercase tracking-wide font-medium capitalize",
-                isToday(d) ? "text-[#0A0A0A]" : "text-[#737373]"
-              )}>
-                {dayLabel}
-              </p>
-              {isToday(d) && (
-                <span className="text-[10px] bg-[#0A0A0A] text-white px-1.5 py-0.5 rounded-full">hoy</span>
-              )}
-              <span className="text-xs text-[#A3A3A3]">
-                {dayAppts.length > 0 ? `${dayAppts.length} ${dayAppts.length === 1 ? "turno" : "turnos"}` : "sin turnos"}
-              </span>
-            </button>
-            {dayAppts.length > 0 && (
-              <div className="space-y-2">
-                {dayAppts.map((appt) => (
-                  <AppointmentCard
-                    key={appt.id}
-                    appointment={appt}
-                    onStatusChange={(status) => onStatusChange(appt.id, status)}
-                  />
-                ))}
-              </div>
+    <div className="border border-[#E5E5E5] rounded-xl overflow-hidden flex flex-col" style={{ maxHeight: "calc(100vh - 230px)" }}>
+      {/* Sticky header row */}
+      <div className="flex flex-shrink-0 border-b border-[#E5E5E5] bg-white z-20">
+        <div className="w-10 flex-shrink-0" />
+        {days.map((day) => (
+          <button
+            key={format(day, "yyyy-MM-dd")}
+            onClick={() => isWeek && onDayClick(day)}
+            className={cn(
+              "flex-1 py-2 flex flex-col items-center border-l border-[#F0F0F0]",
+              isWeek && "hover:bg-[#FAFAFA] transition-colors"
             )}
-          </section>
-        )
-      })}
+          >
+            <span className={cn(
+              "text-[10px] uppercase font-medium tracking-wide",
+              isToday(day) ? "text-[#0A0A0A]" : "text-[#A3A3A3]"
+            )}>
+              {format(day, isWeek ? "EEE" : "EEEE", { locale: es })}
+            </span>
+            <span className={cn(
+              "text-sm font-semibold w-7 h-7 flex items-center justify-center rounded-full mt-0.5",
+              isToday(day) ? "bg-[#0A0A0A] text-white" : "text-[#525252]"
+            )}>
+              {format(day, "d")}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Scrollable grid body */}
+      <div ref={scrollRef} className="overflow-y-auto overflow-x-auto flex-1">
+        <div className="flex relative" style={{ minWidth: isWeek ? `${days.length * 80 + 40}px` : undefined }}>
+          {/* Hour labels column */}
+          <div className="w-10 flex-shrink-0 relative">
+            {hours.map((h) => (
+              <div key={h} style={{ height: PX_PER_HOUR }} className="relative border-b border-[#F5F5F5]">
+                <span className="absolute -top-2 right-1.5 text-[10px] text-[#A3A3A3] tabular-nums select-none">
+                  {`${String(h).padStart(2, "0")}:00`}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Day columns */}
+          {days.map((day) => {
+            const key = format(day, "yyyy-MM-dd")
+            const dayAppts = byDay[key] ?? []
+            return (
+              <div key={key} className="flex-1 min-w-0 border-l border-[#F0F0F0] relative">
+                {/* Hour lines */}
+                {hours.map((h) => (
+                  <div key={h} style={{ height: PX_PER_HOUR }} className="border-b border-[#F5F5F5]" />
+                ))}
+
+                {/* Appointments */}
+                {dayAppts.map((appt) => {
+                  const parts = appt.start_time.split(":")
+                  const hh = parseInt(parts[0])
+                  const mm = parseInt(parts[1])
+                  if (hh < HOUR_START || hh >= HOUR_END) return null
+                  const topMin = (hh - HOUR_START) * 60 + mm
+                  const top = (topMin / 60) * PX_PER_HOUR + 1
+                  const durationMin = appt.services?.duration_minutes ?? 60
+                  const height = Math.max((durationMin / 60) * PX_PER_HOUR - 2, 24)
+                  const gridColor = GRID_COLORS[appt.status] ?? GRID_COLORS.reserved
+
+                  return (
+                    <div
+                      key={appt.id}
+                      className="absolute inset-x-0.5 rounded-lg overflow-hidden"
+                      style={{ top, height }}
+                    >
+                      {isWeek ? (
+                        <button
+                          onClick={() => onDayClick(day)}
+                          className={cn("w-full h-full px-1.5 py-1 text-left rounded-lg", gridColor)}
+                        >
+                          <p className="text-[10px] font-medium leading-tight truncate">
+                            {appt.clients?.full_name ?? "Sin clienta"}
+                          </p>
+                          {height > 36 && (
+                            <p className="text-[9px] leading-tight truncate opacity-70">
+                              {appt.services?.name}
+                            </p>
+                          )}
+                        </button>
+                      ) : (
+                        <DayApptBlock
+                          appt={appt}
+                          height={height}
+                          gridColor={gridColor}
+                          onStatusChange={onStatusChange}
+                        />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DayApptBlock({
+  appt,
+  height,
+  gridColor,
+  onStatusChange,
+}: {
+  appt: ApptWithDetails
+  height: number
+  gridColor: string
+  onStatusChange: (id: string, status: AppointmentStatus) => void
+}) {
+  const statusInfo = APPOINTMENT_STATUSES[appt.status as AppointmentStatus] ?? APPOINTMENT_STATUSES.reserved
+  const canAct = appt.status === "reserved" || appt.status === "confirmed"
+
+  return (
+    <div className={cn("w-full h-full px-2 py-1.5 rounded-lg flex flex-col overflow-hidden", gridColor)}>
+      <div className="flex items-start justify-between gap-1 min-w-0">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold leading-tight truncate">
+            {appt.clients?.full_name ?? "Sin clienta"}
+          </p>
+          {height > 40 && (
+            <p className="text-[10px] leading-tight truncate opacity-70 mt-0.5">
+              {formatTime(appt.start_time)} · {appt.services?.name}
+            </p>
+          )}
+          {height > 56 && appt.services?.price != null && (
+            <p className="text-[10px] leading-tight opacity-60 mt-0.5 tabular-nums">
+              {formatCurrency(appt.price_charged ?? appt.services.price)}
+            </p>
+          )}
+        </div>
+        <Badge className={cn("text-[9px] px-1.5 py-0 h-4 rounded-full border-0 whitespace-nowrap flex-shrink-0", statusInfo.color)}>
+          {statusInfo.label}
+        </Badge>
+      </div>
+
+      {canAct && height >= 90 && (
+        <div className="flex gap-1 mt-auto pt-1 border-t border-black/10">
+          <button
+            onClick={(e) => { e.stopPropagation(); onStatusChange(appt.id, "completed") }}
+            className="flex-1 text-[10px] font-medium py-1 rounded bg-white/60 hover:bg-white/90 text-[#16A34A] transition-colors"
+          >
+            ✓ Realizado
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onStatusChange(appt.id, "no_show") }}
+            className="flex-1 text-[10px] font-medium py-1 rounded bg-white/60 hover:bg-white/90 text-[#DC2626] transition-colors"
+          >
+            ✗ Ausente
+          </button>
+          {appt.status === "reserved" && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onStatusChange(appt.id, "confirmed") }}
+              className="flex-1 text-[10px] font-medium py-1 rounded bg-white/60 hover:bg-white/90 text-[#525252] transition-colors"
+            >
+              Confirmar
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -340,67 +481,6 @@ function MonthView({
           )
         })}
       </div>
-    </div>
-  )
-}
-
-function AppointmentCard({
-  appointment: appt,
-  onStatusChange,
-}: {
-  appointment: ApptWithDetails
-  onStatusChange: (status: AppointmentStatus) => void
-}) {
-  const statusInfo = APPOINTMENT_STATUSES[appt.status as AppointmentStatus] ?? APPOINTMENT_STATUSES.reserved
-
-  return (
-    <div className="bg-white border border-[#E5E5E5] rounded-xl p-4 hover:border-[#D4D4D4] transition-colors">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-sm font-medium text-[#0A0A0A] tabular-nums">
-              {formatTime(appt.start_time)}
-            </span>
-            <span className="text-[#D4D4D4]">·</span>
-            <span className="text-sm font-medium text-[#0A0A0A] truncate">
-              {appt.clients?.full_name ?? "Sin clienta"}
-            </span>
-          </div>
-          <p className="text-xs text-[#737373] truncate">{appt.services?.name}</p>
-          {appt.price_charged != null && (
-            <p className="text-xs text-[#A3A3A3] mt-0.5">{formatCurrency(appt.price_charged)}</p>
-          )}
-        </div>
-
-        <Badge className={cn("text-[10px] px-2 py-0.5 rounded-full border-0 whitespace-nowrap", statusInfo.color)}>
-          {statusInfo.label}
-        </Badge>
-      </div>
-
-      {(appt.status === "reserved" || appt.status === "confirmed") && (
-        <div className="flex gap-2 mt-3 pt-3 border-t border-[#F0F0F0]">
-          <button
-            onClick={() => onStatusChange("completed")}
-            className="flex-1 text-xs text-[#16A34A] font-medium py-1.5 rounded-lg hover:bg-[#F0FDF4] transition-colors"
-          >
-            ✓ Realizado
-          </button>
-          <button
-            onClick={() => onStatusChange("no_show")}
-            className="flex-1 text-xs text-[#DC2626] font-medium py-1.5 rounded-lg hover:bg-[#FEF2F2] transition-colors"
-          >
-            ✗ Ausente
-          </button>
-          {appt.status === "reserved" && (
-            <button
-              onClick={() => onStatusChange("confirmed")}
-              className="flex-1 text-xs text-[#525252] font-medium py-1.5 rounded-lg hover:bg-[#F5F5F5] transition-colors"
-            >
-              Confirmar
-            </button>
-          )}
-        </div>
-      )}
     </div>
   )
 }
