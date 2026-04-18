@@ -3,206 +3,157 @@
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 
-type DebugState = {
-  envUrl: string
-  envKeyPrefix: string
-  session: unknown
-  sessionError: string | null
-  user: unknown
-  userError: string | null
-  profileRow: unknown
-  profileError: string | null
-  servicesAll: unknown
-  servicesAllError: string | null
-  servicesFiltered: unknown
-  servicesFilteredError: string | null
-  appointmentsAll: unknown
-  appointmentsAllError: string | null
+type Step = {
+  name: string
+  status: "pending" | "ok" | "timeout" | "error"
+  result?: unknown
+  error?: string
+  durationMs?: number
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`timeout after ${ms}ms`)), ms)),
+  ])
 }
 
 export default function DebugPage() {
-  const [state, setState] = useState<DebugState | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [steps, setSteps] = useState<Step[]>([])
+  const [envUrl, setEnvUrl] = useState("")
+  const [envKeyPrefix, setEnvKeyPrefix] = useState("")
+  const [cookies, setCookies] = useState("")
 
   useEffect(() => {
+    setEnvUrl(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "(undefined)")
+    setEnvKeyPrefix((process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").slice(0, 20) + "…")
+    setCookies(typeof document !== "undefined" ? document.cookie : "")
+
     const supabase = createClient()
-    const out: DebugState = {
-      envUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "(undefined)",
-      envKeyPrefix: (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").slice(0, 20) + "…",
-      session: null,
-      sessionError: null,
-      user: null,
-      userError: null,
-      profileRow: null,
-      profileError: null,
-      servicesAll: null,
-      servicesAllError: null,
-      servicesFiltered: null,
-      servicesFilteredError: null,
-      appointmentsAll: null,
-      appointmentsAllError: null,
+    const allSteps: Step[] = [
+      { name: "auth.getSession()", status: "pending" },
+      { name: "auth.getUser()", status: "pending" },
+      { name: "from('profiles').select() — no filtro", status: "pending" },
+      { name: "from('services').select() — no filtro", status: "pending" },
+      { name: "from('appointments').select() — no filtro", status: "pending" },
+    ]
+    setSteps(allSteps)
+
+    const update = (i: number, patch: Partial<Step>) => {
+      setSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)))
     }
 
-    async function run() {
+    async function runStep(i: number, fn: () => Promise<unknown>) {
+      const t0 = Date.now()
       try {
-        const { data: sessionData, error: sErr } = await supabase.auth.getSession()
-        out.session = sessionData.session
-          ? {
-              user_id: sessionData.session.user.id,
-              email: sessionData.session.user.email,
-              access_token_length: sessionData.session.access_token?.length,
-              expires_at: sessionData.session.expires_at,
-            }
-          : null
-        out.sessionError = sErr ? sErr.message : null
+        const res = await withTimeout(fn(), 6000)
+        update(i, { status: "ok", result: res, durationMs: Date.now() - t0 })
       } catch (e) {
-        out.sessionError = String(e)
+        const msg = String(e)
+        update(i, {
+          status: msg.includes("timeout") ? "timeout" : "error",
+          error: msg,
+          durationMs: Date.now() - t0,
+        })
       }
-
-      try {
-        const { data: userData, error: uErr } = await supabase.auth.getUser()
-        out.user = userData.user ? { id: userData.user.id, email: userData.user.email } : null
-        out.userError = uErr ? uErr.message : null
-      } catch (e) {
-        out.userError = String(e)
-      }
-
-      // Profile
-      const uid = (out.user as { id?: string } | null)?.id
-      if (uid) {
-        try {
-          const { data, error } = await supabase.from("profiles").select("*").eq("id", uid).maybeSingle()
-          out.profileRow = data
-          out.profileError = error ? error.message : null
-        } catch (e) {
-          out.profileError = String(e)
-        }
-      }
-
-      // Services — no filters (RLS only)
-      try {
-        const { data, error } = await supabase.from("services").select("id, user_id, name")
-        out.servicesAll = { count: data?.length ?? 0, rows: data?.slice(0, 5) ?? [] }
-        out.servicesAllError = error ? `${error.code ?? ""} ${error.message}` : null
-      } catch (e) {
-        out.servicesAllError = String(e)
-      }
-
-      // Services filtered by current user
-      if (uid) {
-        try {
-          const { data, error } = await supabase
-            .from("services")
-            .select("id, user_id, name")
-            .eq("user_id", uid)
-          out.servicesFiltered = { count: data?.length ?? 0, rows: data?.slice(0, 5) ?? [] }
-          out.servicesFilteredError = error ? `${error.code ?? ""} ${error.message}` : null
-        } catch (e) {
-          out.servicesFilteredError = String(e)
-        }
-      }
-
-      // Appointments — no filters
-      try {
-        const { data, error } = await supabase.from("appointments").select("id, user_id, date, start_time")
-        out.appointmentsAll = { count: data?.length ?? 0, rows: data?.slice(0, 5) ?? [] }
-        out.appointmentsAllError = error ? `${error.code ?? ""} ${error.message}` : null
-      } catch (e) {
-        out.appointmentsAllError = String(e)
-      }
-
-      setState(out)
-      setLoading(false)
     }
 
-    run()
+    // Fire all steps in parallel — no dependency on previous results
+    void runStep(0, async () => {
+      const { data, error } = await supabase.auth.getSession()
+      if (error) throw error
+      return data.session
+        ? {
+            user_id: data.session.user.id,
+            email: data.session.user.email,
+            expires_at: data.session.expires_at,
+          }
+        : null
+    })
+
+    void runStep(1, async () => {
+      const { data, error } = await supabase.auth.getUser()
+      if (error) throw error
+      return data.user ? { id: data.user.id, email: data.user.email } : null
+    })
+
+    void runStep(2, async () => {
+      const { data, error } = await supabase.from("profiles").select("id, full_name, business_name")
+      if (error) throw new Error(`${error.code ?? ""} ${error.message}`)
+      return { count: data?.length ?? 0, rows: data ?? [] }
+    })
+
+    void runStep(3, async () => {
+      const { data, error } = await supabase.from("services").select("id, user_id, name")
+      if (error) throw new Error(`${error.code ?? ""} ${error.message}`)
+      return { count: data?.length ?? 0, rows: data ?? [] }
+    })
+
+    void runStep(4, async () => {
+      const { data, error } = await supabase.from("appointments").select("id, user_id, date, start_time")
+      if (error) throw new Error(`${error.code ?? ""} ${error.message}`)
+      return { count: data?.length ?? 0, rows: data ?? [] }
+    })
   }, [])
 
-  if (loading) {
-    return <div className="p-6 text-sm">Ejecutando diagnóstico…</div>
-  }
-
   return (
-    <div className="p-6 max-w-4xl mx-auto text-sm font-mono space-y-6">
+    <div className="p-6 max-w-4xl mx-auto text-sm font-mono space-y-5">
       <div>
-        <h1 className="text-xl font-bold mb-2">GlowMetrics — Debug</h1>
-        <p className="text-[#737373] text-xs">Diagnóstico de auth + queries. No dejar en prod a largo plazo.</p>
+        <h1 className="text-xl font-bold mb-1">GlowMetrics — Debug</h1>
+        <p className="text-[#737373] text-xs">Cada paso tiene timeout de 6s. Resultados aparecen a medida que llegan.</p>
       </div>
 
-      <Section title="ENV">
-        <Row label="NEXT_PUBLIC_SUPABASE_URL" value={state?.envUrl} />
-        <Row label="ANON_KEY (prefix)" value={state?.envKeyPrefix} />
-      </Section>
+      <div className="border border-[#E5E5E5] rounded p-3 space-y-1">
+        <h2 className="text-xs uppercase tracking-wide text-[#737373] mb-2 font-semibold">ENV</h2>
+        <Row label="SUPABASE_URL" value={envUrl} />
+        <Row label="ANON_KEY" value={envKeyPrefix} />
+        <Row label="document.cookie (nombres)" value={cookies.split(";").map((c) => c.trim().split("=")[0]).filter(Boolean).join(", ") || "(vacío)"} />
+      </div>
 
-      <Section title="AUTH SESSION (getSession)">
-        <pre className="bg-[#F5F5F5] p-3 rounded text-xs overflow-auto">
-          {JSON.stringify(state?.session, null, 2)}
-        </pre>
-        {state?.sessionError && <p className="text-red-600 text-xs mt-2">Error: {state.sessionError}</p>}
-      </Section>
-
-      <Section title="AUTH USER (getUser — verifica JWT en el servidor)">
-        <pre className="bg-[#F5F5F5] p-3 rounded text-xs overflow-auto">
-          {JSON.stringify(state?.user, null, 2)}
-        </pre>
-        {state?.userError && <p className="text-red-600 text-xs mt-2">Error: {state.userError}</p>}
-      </Section>
-
-      <Section title="PROFILES — eq('id', user.id)">
-        <pre className="bg-[#F5F5F5] p-3 rounded text-xs overflow-auto">
-          {JSON.stringify(state?.profileRow, null, 2)}
-        </pre>
-        {state?.profileError && <p className="text-red-600 text-xs mt-2">Error: {state.profileError}</p>}
-      </Section>
-
-      <Section title="SERVICES — sin filtros (solo RLS)">
-        <pre className="bg-[#F5F5F5] p-3 rounded text-xs overflow-auto">
-          {JSON.stringify(state?.servicesAll, null, 2)}
-        </pre>
-        {state?.servicesAllError && <p className="text-red-600 text-xs mt-2">Error: {state.servicesAllError}</p>}
-      </Section>
-
-      <Section title="SERVICES — eq('user_id', user.id)">
-        <pre className="bg-[#F5F5F5] p-3 rounded text-xs overflow-auto">
-          {JSON.stringify(state?.servicesFiltered, null, 2)}
-        </pre>
-        {state?.servicesFilteredError && <p className="text-red-600 text-xs mt-2">Error: {state.servicesFilteredError}</p>}
-      </Section>
-
-      <Section title="APPOINTMENTS — sin filtros (solo RLS)">
-        <pre className="bg-[#F5F5F5] p-3 rounded text-xs overflow-auto">
-          {JSON.stringify(state?.appointmentsAll, null, 2)}
-        </pre>
-        {state?.appointmentsAllError && <p className="text-red-600 text-xs mt-2">Error: {state.appointmentsAllError}</p>}
-      </Section>
-
-      <div className="text-xs text-[#737373] pt-4 border-t border-[#E5E5E5]">
-        Cómo interpretar:
-        <ul className="list-disc ml-5 mt-2 space-y-1">
-          <li><b>Session null</b> → el browser client no tiene el token en memoria (problema de cookies).</li>
-          <li><b>User null pero Session OK</b> → JWT inválido o expirado.</li>
-          <li><b>Services sin filtro count = 0</b> pero hay filas en la DB → RLS bloquea.</li>
-          <li><b>Services filtrado count = 0</b> pero sin filtro count &gt; 0 → el user actual no es dueño de las filas.</li>
-          <li><b>ENV URL distinto a jjsainuhekjlrhhucqzr</b> → Vercel apunta a otro proyecto.</li>
-        </ul>
+      <div className="space-y-3">
+        {steps.map((s, i) => (
+          <div key={i} className="border border-[#E5E5E5] rounded p-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-semibold text-[#0A0A0A]">{s.name}</span>
+              <StatusBadge status={s.status} ms={s.durationMs} />
+            </div>
+            {s.status === "ok" && (
+              <pre className="bg-[#F5F5F5] p-2 rounded text-xs overflow-auto mt-2">{JSON.stringify(s.result, null, 2)}</pre>
+            )}
+            {s.status === "error" && <p className="text-red-600 text-xs mt-1">{s.error}</p>}
+            {s.status === "timeout" && <p className="text-orange-600 text-xs mt-1">⏱ Timeout — la llamada no respondió</p>}
+            {s.status === "pending" && <p className="text-[#A3A3A3] text-xs mt-1">⏳ Ejecutando…</p>}
+          </div>
+        ))}
       </div>
     </div>
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function StatusBadge({ status, ms }: { status: Step["status"]; ms?: number }) {
+  const map: Record<Step["status"], string> = {
+    pending: "bg-[#F5F5F5] text-[#737373]",
+    ok: "bg-[#DCFCE7] text-[#16A34A]",
+    timeout: "bg-[#FEF3C7] text-[#D97706]",
+    error: "bg-[#FEE2E2] text-[#DC2626]",
+  }
+  const label: Record<Step["status"], string> = {
+    pending: "pending",
+    ok: "ok",
+    timeout: "timeout",
+    error: "error",
+  }
   return (
-    <div>
-      <h2 className="text-xs uppercase tracking-wide text-[#737373] mb-2 font-semibold">{title}</h2>
-      {children}
-    </div>
+    <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${map[status]}`}>
+      {label[status]}{ms != null ? ` · ${ms}ms` : ""}
+    </span>
   )
 }
 
 function Row({ label, value }: { label: string; value?: string }) {
   return (
-    <div className="flex items-baseline gap-2 text-xs py-1">
-      <span className="text-[#737373]">{label}:</span>
+    <div className="flex items-baseline gap-2 text-xs py-0.5">
+      <span className="text-[#737373] shrink-0">{label}:</span>
       <span className="text-[#0A0A0A] break-all">{value ?? "(undefined)"}</span>
     </div>
   )
