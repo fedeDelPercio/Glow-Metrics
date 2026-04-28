@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
-import { Home, Calendar, Scissors, Users, Package, Wallet, BarChart3, Plus, LogOut, RefreshCw } from "lucide-react"
+import { Home, Calendar, Scissors, Users, Package, Wallet, BarChart3, Plus, LogOut, RefreshCw, Globe } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAuth } from "@/hooks/useAuth"
 import { triggerGlobalRefresh } from "@/hooks/useVisibilityRefetch"
@@ -20,6 +20,7 @@ const SECONDARY_ITEMS = [
   { href: "/insumos", icon: Package, label: "Insumos" },
   { href: "/costos", icon: Wallet, label: "Costos fijos" },
   { href: "/reportes", icon: BarChart3, label: "Reportes" },
+  { href: "/reservas-online", icon: Globe, label: "Reservas online" },
 ]
 
 interface SidebarProps {

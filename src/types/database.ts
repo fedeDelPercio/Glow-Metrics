@@ -29,6 +29,8 @@ export type Database = {
           working_hours: Json
           slot_duration_minutes: number
           onboarding_completed: boolean
+          public_slug: string | null
+          accepts_online_booking: boolean
           created_at: string
           updated_at: string
           deleted_at: string | null
@@ -44,6 +46,8 @@ export type Database = {
           working_hours?: Json
           slot_duration_minutes?: number
           onboarding_completed?: boolean
+          public_slug?: string | null
+          accepts_online_booking?: boolean
           created_at?: string
           updated_at?: string
           deleted_at?: string | null
@@ -59,6 +63,8 @@ export type Database = {
           working_hours?: Json
           slot_duration_minutes?: number
           onboarding_completed?: boolean
+          public_slug?: string | null
+          accepts_online_booking?: boolean
           updated_at?: string
           deleted_at?: string | null
         }
@@ -409,6 +415,7 @@ export type Database = {
           end_time: string
           status: string
           source: string | null
+          booked_via: string | null
           price_charged: number | null
           notes: string | null
           cancellation_reason: string | null
@@ -426,6 +433,7 @@ export type Database = {
           end_time: string
           status?: string
           source?: string | null
+          booked_via?: string | null
           price_charged?: number | null
           notes?: string | null
           cancellation_reason?: string | null
@@ -443,6 +451,7 @@ export type Database = {
           end_time?: string
           status?: string
           source?: string | null
+          booked_via?: string | null
           price_charged?: number | null
           notes?: string | null
           cancellation_reason?: string | null
