@@ -9,43 +9,42 @@ import type { SupplyCatalog, SupplyPurchase } from "@/types/database"
 import type { SupplyFormValues, PurchaseFormValues } from "@/types/forms"
 
 export function useSupplies() {
-  const { profile } = useAuth()
+  const { user } = useAuth()
+  const userId = user?.id
   const [supplies, setSupplies] = useState<SupplyCatalog[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
   const fetchSupplies = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
+    if (!userId) { setLoading(false); return }
     try {
       const { data } = await supabase
         .from("supply_catalog")
         .select("*")
-        .eq("user_id", session.user.id)
+        .eq("user_id", userId)
         .is("deleted_at", null)
         .order("name", { ascending: true })
       setSupplies(data ?? [])
     } finally {
       setLoading(false)
     }
-  }, [supabase, profile?.id])
+  }, [supabase, userId])
 
   useEffect(() => {
+    if (!userId) return
     fetchSupplies()
-  }, [fetchSupplies])
+  }, [fetchSupplies, userId])
 
   useVisibilityRefetch(fetchSupplies)
   useGlobalRefresh(fetchSupplies)
   useLoadingTimeout(loading, () => setLoading(false))
 
   const createSupply = async (values: SupplyFormValues) => {
-    const { data: { session } } = await supabase.auth.getSession()
-    const user = session?.user
-    if (!user) return null
+    if (!userId) return null
 
     const { data, error } = await supabase
       .from("supply_catalog")
-      .insert({ user_id: user.id, ...values })
+      .insert({ user_id: userId, ...values })
       .select()
       .single()
 
@@ -84,15 +83,19 @@ export function useSupplies() {
 }
 
 export function usePurchases() {
+  const { user } = useAuth()
+  const userId = user?.id
   const [purchases, setPurchases] = useState<(SupplyPurchase & { supply_catalog: { name: string; unit: string } | null })[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
   const fetchPurchases = useCallback(async () => {
+    if (!userId) { setLoading(false); return }
     try {
       const { data } = await supabase
         .from("supply_purchases")
         .select("*, supply_catalog(name, unit)")
+        .eq("user_id", userId)
         .is("deleted_at", null)
         .order("purchase_date", { ascending: false })
         .limit(50)
@@ -100,25 +103,24 @@ export function usePurchases() {
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [supabase, userId])
 
   useEffect(() => {
+    if (!userId) return
     fetchPurchases()
-  }, [fetchPurchases])
+  }, [fetchPurchases, userId])
 
   useVisibilityRefetch(fetchPurchases)
   useGlobalRefresh(fetchPurchases)
   useLoadingTimeout(loading, () => setLoading(false))
 
   const createPurchase = async (values: PurchaseFormValues) => {
-    const { data: { session } } = await supabase.auth.getSession()
-    const user = session?.user
-    if (!user) return null
+    if (!userId) return null
 
     const { data, error } = await supabase
       .from("supply_purchases")
       .insert({
-        user_id: user.id,
+        user_id: userId,
         ...values,
         total_price: values.quantity * values.unit_price,
       })

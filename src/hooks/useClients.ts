@@ -5,12 +5,16 @@ import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { useAuth } from "@/hooks/useAuth"
 import { useVisibilityRefetch, useLoadingTimeout, useGlobalRefresh } from "@/hooks/useVisibilityRefetch"
+import { diag, withDiagTimeout } from "@/lib/diag"
 import type { Client } from "@/types/database"
 import type { ClientFormValues } from "@/types/forms"
 import { ITEMS_PER_PAGE } from "@/lib/utils/constants"
 
+const CHANNEL = "hook:useClients"
+
 export function useClients(search?: string) {
-  const { profile } = useAuth()
+  const { user } = useAuth()
+  const userId = user?.id
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [hasMore, setHasMore] = useState(false)
@@ -18,45 +22,53 @@ export function useClients(search?: string) {
   const supabase = createClient()
 
   const fetchClients = useCallback(async (reset = false) => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
-    try {
-      const currentPage = reset ? 0 : page
-      let query = supabase
-        .from("clients")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .is("deleted_at", null)
-        .order("full_name", { ascending: true })
-        .range(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE - 1)
-
-      if (search && search.trim()) {
-        query = query.ilike("full_name", `%${search.trim()}%`)
-      }
-
-      const { data, error } = await query
-      if (error) toast.error(`Error al cargar clientas: ${error.message}`)
-      const results = data ?? []
-
-      if (reset) {
-        setClients(results)
-        setPage(0)
-      } else {
-        setClients((prev) => [...prev, ...results])
-      }
-
-      setHasMore(results.length === ITEMS_PER_PAGE)
-    } catch {
-      toast.error("Fallo al cargar clientas")
-    } finally {
+    if (!userId) {
+      diag.warn(CHANNEL, "fetch_skipped_no_user")
       setLoading(false)
+      return
     }
-  }, [supabase, page, search, profile?.id])
+    const currentPage = reset ? 0 : page
+    let query = supabase
+      .from("clients")
+      .select("*")
+      .eq("user_id", userId)
+      .is("deleted_at", null)
+      .order("full_name", { ascending: true })
+      .range(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE - 1)
+
+    if (search && search.trim()) {
+      query = query.ilike("full_name", `%${search.trim()}%`)
+    }
+
+    const res = await withDiagTimeout(CHANNEL, "fetch", query, 6000)
+    if (!res.ok) {
+      toast.error(res.reason === "timeout" ? "La carga de clientas tardó demasiado" : "Fallo al cargar clientas")
+      setLoading(false)
+      return
+    }
+    const { data, error } = res.value
+    if (error) {
+      diag.error(CHANNEL, "fetch_error", { code: error.code, message: error.message })
+      toast.error(`Error al cargar clientas: ${error.message}`)
+    }
+    const results = data ?? []
+    diag.log(CHANNEL, "fetch_result", { rows: results.length, page: currentPage })
+
+    if (reset) {
+      setClients(results)
+      setPage(0)
+    } else {
+      setClients((prev) => [...prev, ...results])
+    }
+    setHasMore(results.length === ITEMS_PER_PAGE)
+    setLoading(false)
+  }, [supabase, page, search, userId])
 
   useEffect(() => {
+    if (!userId) return
     setLoading(true)
     fetchClients(true)
-  }, [search]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, userId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const doRefetch = useCallback(() => { void fetchClients(true) }, [fetchClients])
   useVisibilityRefetch(doRefetch)
@@ -64,13 +76,11 @@ export function useClients(search?: string) {
   useLoadingTimeout(loading, () => setLoading(false))
 
   const createClient_ = async (values: ClientFormValues) => {
-    const { data: { session } } = await supabase.auth.getSession()
-    const user = session?.user
-    if (!user) return null
+    if (!userId) return null
 
     const { data, error } = await supabase
       .from("clients")
-      .insert({ user_id: user.id, ...values, phone: values.phone || null, email: values.email || null, birth_date: values.birth_date || null })
+      .insert({ user_id: userId, ...values, phone: values.phone || null, email: values.email || null, birth_date: values.birth_date || null })
       .select()
       .single()
 

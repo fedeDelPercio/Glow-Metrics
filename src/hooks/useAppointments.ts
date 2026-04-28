@@ -15,7 +15,8 @@ export type AppointmentWithDetails = Appointment & {
 }
 
 export function useAppointments(dateOrRange?: Date | { from: Date; to: Date }) {
-  const { profile } = useAuth()
+  const { user } = useAuth()
+  const userId = user?.id
   const [appointments, setAppointments] = useState<AppointmentWithDetails[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
@@ -32,8 +33,7 @@ export function useAppointments(dateOrRange?: Date | { from: Date; to: Date }) {
   }
 
   const fetchAppointments = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
+    if (!userId) { setLoading(false); return }
     try {
       let query = supabase
         .from("appointments")
@@ -42,7 +42,7 @@ export function useAppointments(dateOrRange?: Date | { from: Date; to: Date }) {
           clients(id, full_name, phone),
           services(id, name, price, duration_minutes)
         `)
-        .eq("user_id", session.user.id)
+        .eq("user_id", userId)
         .is("deleted_at", null)
         .order("date", { ascending: true })
         .order("start_time", { ascending: true })
@@ -63,21 +63,20 @@ export function useAppointments(dateOrRange?: Date | { from: Date; to: Date }) {
     } finally {
       setLoading(false)
     }
-  }, [supabase, fromKey, toKey, profile?.id])
+  }, [supabase, fromKey, toKey, userId])
 
   useEffect(() => {
+    if (!userId) return
     setLoading(true)
     fetchAppointments()
-  }, [fetchAppointments])
+  }, [fetchAppointments, userId])
 
   useVisibilityRefetch(fetchAppointments)
   useGlobalRefresh(fetchAppointments)
   useLoadingTimeout(loading, () => setLoading(false))
 
   const createAppointment = async (values: AppointmentFormValues) => {
-    const { data: { session } } = await supabase.auth.getSession()
-    const user = session?.user
-    if (!user) return null
+    if (!userId) return null
 
     const { data: serviceData } = await supabase
       .from("services")
@@ -93,7 +92,7 @@ export function useAppointments(dateOrRange?: Date | { from: Date; to: Date }) {
     const { data, error } = await supabase
       .from("appointments")
       .insert({
-        user_id: user.id,
+        user_id: userId,
         ...values,
         end_time,
         price_charged: values.price_charged ?? serviceData?.price ?? null,

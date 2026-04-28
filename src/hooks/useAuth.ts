@@ -1,9 +1,10 @@
 "use client"
 
-import { createContext, createElement, useContext, useEffect, useState, useCallback, type ReactNode } from "react"
+import { createContext, createElement, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { User } from "@supabase/supabase-js"
 import type { Profile } from "@/types/database"
+import { diag, withDiagTimeout } from "@/lib/diag"
 
 type AuthContextValue = {
   user: User | null
@@ -17,56 +18,64 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+interface AuthProviderProps {
+  children: ReactNode
+  initialUser?: User | null
+}
+
+export function AuthProvider({ children, initialUser = null }: AuthProviderProps) {
   const supabase = createClient()
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<User | null>(initialUser)
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const mountedRef = useRef(false)
 
   const fetchProfile = useCallback(async (userId: string) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single()
-    setProfile(data as Profile | null)
+    const res = await withDiagTimeout(
+      "auth",
+      "fetch_profile",
+      supabase.from("profiles").select("*").eq("id", userId).single(),
+      5000,
+    )
+    if (res.ok) setProfile(res.value.data as Profile | null)
   }, [supabase])
 
   useEffect(() => {
-    let cancelled = false
+    if (mountedRef.current) return
+    mountedRef.current = true
+    diag.log("auth", "provider_mount", { hasInitialUser: !!initialUser })
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (cancelled) return
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        try { await fetchProfile(session.user.id) } catch { /* profile optional */ }
+    // Kick off the profile fetch if we already know who the user is.
+    // No getSession() call — that's the historical source of hangs.
+    if (initialUser) {
+      void fetchProfile(initialUser.id)
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      diag.log("auth", "state_change", { event, hasSession: !!session })
+
+      if (event === "SIGNED_OUT") {
+        setUser(null)
+        setProfile(null)
+        return
       }
-      if (!cancelled) setLoading(false)
-    })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        // Only clear on EXPLICIT sign out. Other events (TOKEN_REFRESHED,
-        // USER_UPDATED) can momentarily arrive with null session during
-        // transitions — clearing profile on those leaves dependent hooks
-        // (useDashboardStats et al) permanently stuck with profile=null.
-        if (event === "SIGNED_OUT") {
-          setUser(null)
-          setProfile(null)
-          return
-        }
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
         if (session?.user) {
           setUser(session.user)
           try { await fetchProfile(session.user.id) } catch { /* profile optional */ }
         }
+        return
       }
-    )
+
+      // TOKEN_REFRESHED / INITIAL_SESSION: sync user ref, leave profile alone.
+      if (session?.user) setUser(session.user)
+    })
 
     return () => {
-      cancelled = true
       subscription.unsubscribe()
     }
-  }, [supabase, fetchProfile])
+  }, [supabase, fetchProfile, initialUser])
 
   const signInWithMagicLink = async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
@@ -77,7 +86,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signInWithPassword = async (email: string, password: string) => {
+    setLoading(true)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
+    setLoading(false)
     return { error }
   }
 
@@ -100,7 +111,6 @@ export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) {
     // Fallback for routes that don't have the provider (e.g. /login).
-    // Returns a no-auth stub so destructuring doesn't explode.
     return {
       user: null,
       profile: null,

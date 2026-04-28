@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { diag, type DiagEvent } from "@/lib/diag"
 
 type Step = {
   name: string
@@ -26,6 +27,14 @@ export default function DebugPage() {
   const [localStorageKeys, setLocalStorageKeys] = useState<string[]>([])
   const [navigatorLocks, setNavigatorLocks] = useState("unknown")
   const [runKey, setRunKey] = useState(0)
+  const [events, setEvents] = useState<DiagEvent[]>(() => diag.dump())
+  const [filter, setFilter] = useState("")
+
+  useEffect(() => {
+    setEvents(diag.dump())
+    const unsub = diag.subscribe(() => setEvents(diag.dump()))
+    return unsub
+  }, [])
 
   useEffect(() => {
     setEnvUrl(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "(undefined)")
@@ -70,7 +79,6 @@ export default function DebugPage() {
       }
     }
 
-    // 1. Direct fetch to Supabase REST (bypassing client entirely)
     void runStep(0, async () => {
       const r = await fetch(`${SUPA_URL}/rest/v1/services?select=id&limit=1`, {
         headers: { apikey: ANON, Authorization: `Bearer ${ANON}` },
@@ -78,9 +86,7 @@ export default function DebugPage() {
       return { status: r.status, statusText: r.statusText, body: await r.text() }
     })
 
-    // 2. Direct fetch to auth endpoint — we need the JWT from the cookie
     void runStep(1, async () => {
-      // Try extracting JWT from cookie
       const cookieRaw = document.cookie
       const match = cookieRaw.match(/sb-[^=]+-auth-token=([^;]+)/)
       let accessToken: string | null = null
@@ -124,25 +130,39 @@ export default function DebugPage() {
   const clearAllStorage = () => {
     if (typeof window === "undefined") return
     if (!confirm("Vas a borrar todas las cookies, localStorage y sessionStorage del sitio. ¿Seguro?")) return
-    // Clear localStorage
     try { localStorage.clear() } catch { /* noop */ }
     try { sessionStorage.clear() } catch { /* noop */ }
-    // Clear cookies
     document.cookie.split(";").forEach((c) => {
       const eq = c.indexOf("=")
       const name = (eq > -1 ? c.substring(0, eq) : c).trim()
       document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
       document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${window.location.hostname}`
     })
-    // Drop the singleton so next createClient() makes a fresh one
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (globalThis as any).__supabase_browser_client__
     alert("Storage limpio. Recargá la página e iniciá sesión de nuevo.")
     window.location.href = "/login"
   }
 
+  const copyLogs = async () => {
+    const text = events.map((e) => {
+      const time = new Date(e.t).toISOString()
+      return `[${time}] [${e.level}] ${e.channel} ${e.event} ${e.data ? JSON.stringify(e.data) : ""}`
+    }).join("\n")
+    try {
+      await navigator.clipboard.writeText(text)
+      alert("Logs copiados al portapapeles")
+    } catch {
+      alert("No pude copiar. Seleccioná el texto manualmente.")
+    }
+  }
+
+  const filteredEvents = filter.trim()
+    ? events.filter((e) => (e.channel + " " + e.event).toLowerCase().includes(filter.toLowerCase()))
+    : events
+
   return (
-    <div className="p-6 max-w-4xl mx-auto text-sm font-mono space-y-5">
+    <div className="p-6 max-w-5xl mx-auto text-sm font-mono space-y-5">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-bold mb-1">GlowMetrics — Debug</h1>
@@ -150,7 +170,7 @@ export default function DebugPage() {
         </div>
         <div className="flex gap-2">
           <button onClick={() => setRunKey((k) => k + 1)} className="px-3 py-1.5 text-xs bg-[#0A0A0A] text-white rounded">
-            Re-run
+            Re-run probes
           </button>
           <button onClick={clearAllStorage} className="px-3 py-1.5 text-xs bg-[#DC2626] text-white rounded">
             Clear storage
@@ -168,6 +188,7 @@ export default function DebugPage() {
       </div>
 
       <div className="space-y-3">
+        <h2 className="text-xs uppercase tracking-wide text-[#737373] font-semibold">Connectivity probes</h2>
         {steps.map((s, i) => (
           <div key={i} className="border border-[#E5E5E5] rounded p-3">
             <div className="flex items-center justify-between mb-1">
@@ -182,6 +203,46 @@ export default function DebugPage() {
             {s.status === "pending" && <p className="text-[#A3A3A3] text-xs mt-1">⏳ Ejecutando…</p>}
           </div>
         ))}
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs uppercase tracking-wide text-[#737373] font-semibold">
+            Live diag events ({events.length})
+          </h2>
+          <div className="flex gap-2 items-center">
+            <input
+              placeholder="filter (auth, hook:useClients, ...)"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="h-7 text-xs px-2 border border-[#E5E5E5] rounded w-60"
+            />
+            <button onClick={copyLogs} className="px-2 py-1 text-xs border border-[#E5E5E5] rounded hover:bg-[#F5F5F5]">
+              Copy
+            </button>
+            <button onClick={() => { diag.clear(); setEvents([]) }} className="px-2 py-1 text-xs border border-[#E5E5E5] rounded hover:bg-[#F5F5F5]">
+              Clear
+            </button>
+          </div>
+        </div>
+        <div className="border border-[#E5E5E5] rounded bg-[#0A0A0A] text-white text-[11px] leading-relaxed p-3 max-h-96 overflow-y-auto">
+          {filteredEvents.length === 0 ? (
+            <p className="text-[#737373]">Sin eventos{filter ? ` (filtro: "${filter}")` : ""}. Navegá por la app para generar actividad.</p>
+          ) : (
+            filteredEvents.map((e, i) => {
+              const time = new Date(e.t).toISOString().slice(11, 23)
+              const color = e.level === "error" ? "text-[#F87171]" : e.level === "warn" ? "text-[#FBBF24]" : "text-white"
+              return (
+                <div key={i} className={`whitespace-pre-wrap break-all ${color}`}>
+                  <span className="text-[#A3A3A3]">{time}</span>{" "}
+                  <span className="text-[#60A5FA]">{e.channel}</span>{" "}
+                  <span className="font-semibold">{e.event}</span>
+                  {e.data && <span className="text-[#D4D4D4]"> {JSON.stringify(e.data)}</span>}
+                </div>
+              )
+            })
+          )}
+        </div>
       </div>
     </div>
   )

@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Header } from "@/components/layout/Header"
 import { BottomNav } from "@/components/layout/BottomNav"
 import { Sidebar } from "@/components/layout/Sidebar"
-import { NewAppointmentSheet } from "@/components/forms/NewAppointmentSheet"
+import { QuickAddSheet } from "@/components/layout/QuickAddSheet"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [fabOpen, setFabOpen] = useState(false)
@@ -21,7 +21,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <BottomNav onFabClick={() => setFabOpen(true)} />
       </div>
 
-      <NewAppointmentSheet open={fabOpen} onOpenChange={setFabOpen} />
+      <QuickAddSheet open={fabOpen} onOpenChange={setFabOpen} />
     </div>
   )
 }

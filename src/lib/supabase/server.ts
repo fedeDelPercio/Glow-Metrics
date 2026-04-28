@@ -19,7 +19,7 @@ export async function createClient() {
               cookieStore.set(name, value, options)
             )
           } catch {
-            // Server Component — cookies set in middleware
+            // Server Component — cookies set in proxy
           }
         },
       },

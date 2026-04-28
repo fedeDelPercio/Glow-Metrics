@@ -14,15 +14,15 @@ export type ServiceWithCategory = Service & {
 }
 
 export function useServices() {
-  const { profile } = useAuth()
+  const { user } = useAuth()
+  const userId = user?.id
   const [services, setServices] = useState<ServiceWithCategory[]>([])
   const [categories, setCategories] = useState<ServiceCategory[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
   const fetchServices = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
+    if (!userId) { setLoading(false); return }
     try {
       const { data, error } = await supabase
         .from("services")
@@ -31,7 +31,7 @@ export function useServices() {
           service_categories(*),
           service_supplies(*, supply_catalog(name, unit))
         `)
-        .eq("user_id", session.user.id)
+        .eq("user_id", userId)
         .is("deleted_at", null)
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true })
@@ -41,7 +41,7 @@ export function useServices() {
     } catch {
       toast.error("Fallo al cargar servicios")
     }
-  }, [supabase, profile?.id])
+  }, [supabase, userId])
 
   const fetchCategories = useCallback(async () => {
     const { data } = await supabase
@@ -61,21 +61,20 @@ export function useServices() {
   }, [fetchServices, fetchCategories])
 
   useEffect(() => {
+    if (!userId) return
     void refetch()
-  }, [refetch])
+  }, [refetch, userId])
 
   useVisibilityRefetch(refetch)
   useGlobalRefresh(refetch)
   useLoadingTimeout(loading, () => setLoading(false))
 
   const createService = async (values: ServiceFormValues) => {
-    const { data: { session } } = await supabase.auth.getSession()
-    const user = session?.user
-    if (!user) return
+    if (!userId) return
 
     const optimistic: ServiceWithCategory = {
       id: crypto.randomUUID(),
-      user_id: user.id,
+      user_id: userId,
       category_id: values.category_id ?? null,
       name: values.name,
       description: values.description ?? null,
@@ -94,7 +93,7 @@ export function useServices() {
 
     const { data, error } = await supabase
       .from("services")
-      .insert({ user_id: user.id, ...values })
+      .insert({ user_id: userId, ...values })
       .select(`*, service_categories(*), service_supplies(*, supply_catalog(name, unit))`)
       .single()
 

@@ -12,7 +12,8 @@ import type { DashboardStats } from "@/types/dashboard"
 import { SOURCE_CHANNELS } from "@/lib/utils/constants"
 
 export function useDashboardStats(referenceDate = new Date()) {
-  const { profile } = useAuth()
+  const { user, profile } = useAuth()
+  const userId = user?.id
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [revalidateTick, setRevalidateTick] = useState(0)
@@ -21,14 +22,14 @@ export function useDashboardStats(referenceDate = new Date()) {
   const triggerRevalidate = useCallback(() => setRevalidateTick((n) => n + 1), [])
 
   useEffect(() => {
-    if (!profile) return
+    if (!userId || !profile) return
+    const uid = userId
+    const prof = profile
     let cancelled = false
 
     async function fetchStats() {
       setLoading(true)
       try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) { setLoading(false); return }
       const periodStart = startOfMonth(referenceDate)
       const periodEnd = endOfMonth(referenceDate)
       const prevStart = startOfMonth(subMonths(referenceDate, 1))
@@ -45,22 +46,22 @@ export function useDashboardStats(referenceDate = new Date()) {
         supabase
           .from("appointments")
           .select("*, services(id, name, price, duration_minutes)")
-          .eq("user_id", session.user.id)
+          .eq("user_id", uid)
           .is("deleted_at", null)
           .gte("date", format(periodStart, "yyyy-MM-dd"))
           .lte("date", format(periodEnd, "yyyy-MM-dd")),
         supabase
           .from("appointments")
           .select("price_charged, status")
-          .eq("user_id", session.user.id)
+          .eq("user_id", uid)
           .is("deleted_at", null)
           .gte("date", format(prevStart, "yyyy-MM-dd"))
           .lte("date", format(prevEnd, "yyyy-MM-dd"))
           .eq("status", "completed"),
-        supabase.from("services").select("*").eq("user_id", session.user.id).is("deleted_at", null),
+        supabase.from("services").select("*").eq("user_id", uid).is("deleted_at", null),
         supabase.from("service_supplies").select("*, supply_catalog(current_stock, unit)"),
-        supabase.from("supply_purchases").select("*").eq("user_id", session.user.id).is("deleted_at", null),
-        supabase.from("fixed_costs").select("*").eq("user_id", session.user.id).is("deleted_at", null).eq("is_active", true),
+        supabase.from("supply_purchases").select("*").eq("user_id", uid).is("deleted_at", null),
+        supabase.from("fixed_costs").select("*").eq("user_id", uid).is("deleted_at", null).eq("is_active", true),
       ])
 
       const completed = (appointments ?? []).filter((a) => a.status === "completed")
@@ -77,8 +78,8 @@ export function useDashboardStats(referenceDate = new Date()) {
       const totalSlots = calcTotalSlots(
         periodStart,
         periodEnd,
-        profile!.working_hours,
-        profile!.slot_duration_minutes
+        prof.working_hours,
+        prof.slot_duration_minutes
       )
 
       const occupancy = calcOccupancyRate(completed.length, totalSlots)
@@ -164,7 +165,7 @@ export function useDashboardStats(referenceDate = new Date()) {
 
     fetchStats()
     return () => { cancelled = true }
-  }, [profile?.id, referenceDate.getMonth(), referenceDate.getFullYear(), revalidateTick]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userId, profile?.id, referenceDate.getMonth(), referenceDate.getFullYear(), revalidateTick]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useVisibilityRefetch(triggerRevalidate)
   useGlobalRefresh(triggerRevalidate)

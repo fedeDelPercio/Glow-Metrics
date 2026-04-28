@@ -17,12 +17,17 @@ export function createClient() {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         auth: {
-          // Disable navigator.locks-based synchronization. Supabase JS v2 uses
-          // navigator.locks.request() to serialize auth state across tabs, but
-          // a stale lock from a previous page (tab closed mid-op, SW, iframe)
-          // leaves every auth call hanging forever — queries "silently never
-          // fire". Replacing it with a no-op is safe for single-tab use and
-          // unblocks all calls.
+          // Let the server (proxy.ts + root layout) own token refresh via
+          // getUser(). With autoRefreshToken=true, the browser client races
+          // the server on every navigation: both try to rotate the refresh
+          // token, one invalidates the other, and the loser hangs — freezing
+          // every subsequent REST query. Disabling autoRefresh makes the
+          // browser client strictly read-only on the session; it picks up
+          // fresh tokens from cookies as the server rotates them. See
+          // DIAGNOSTIC.md.
+          autoRefreshToken: false,
+          // No-op lock: serialization is unnecessary when the browser client
+          // doesn't refresh, and navigator.locks has historically deadlocked.
           lock: async <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>) => fn(),
         },
       }

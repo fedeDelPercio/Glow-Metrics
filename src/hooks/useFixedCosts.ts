@@ -16,19 +16,19 @@ const MONTHLY_MULTIPLIERS: Record<string, number> = {
 }
 
 export function useFixedCosts() {
-  const { profile } = useAuth()
+  const { user } = useAuth()
+  const userId = user?.id
   const [costs, setCosts] = useState<FixedCost[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
   const fetchCosts = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) { setLoading(false); return }
+    if (!userId) { setLoading(false); return }
     try {
       const { data } = await supabase
         .from("fixed_costs")
         .select("*")
-        .eq("user_id", session.user.id)
+        .eq("user_id", userId)
         .is("deleted_at", null)
         .eq("is_active", true)
         .order("category", { ascending: true })
@@ -37,11 +37,12 @@ export function useFixedCosts() {
     } finally {
       setLoading(false)
     }
-  }, [supabase, profile?.id])
+  }, [supabase, userId])
 
   useEffect(() => {
+    if (!userId) return
     fetchCosts()
-  }, [fetchCosts])
+  }, [fetchCosts, userId])
 
   useVisibilityRefetch(fetchCosts)
   useGlobalRefresh(fetchCosts)
@@ -52,13 +53,11 @@ export function useFixedCosts() {
   }, 0)
 
   const createCost = async (values: FixedCostFormValues) => {
-    const { data: { session } } = await supabase.auth.getSession()
-    const user = session?.user
-    if (!user) return null
+    if (!userId) return null
 
     const { data, error } = await supabase
       .from("fixed_costs")
-      .insert({ user_id: user.id, ...values })
+      .insert({ user_id: userId, ...values })
       .select()
       .single()
 

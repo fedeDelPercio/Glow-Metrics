@@ -71,13 +71,13 @@ export function Sidebar({ onFabClick }: SidebarProps) {
         </button>
       </div>
 
-      {/* Nuevo turno CTA */}
+      {/* Quick add CTA */}
       <div className="px-3 pt-4">
         <button
           onClick={onFabClick}
           className="w-full flex items-center justify-center gap-2 h-10 bg-[#0A0A0A] text-white text-sm font-medium rounded-lg hover:bg-[#262626] transition-colors active:scale-[0.98]"
         >
-          <Plus className="w-4 h-4" strokeWidth={2} /> Nuevo turno
+          <Plus className="w-4 h-4" strokeWidth={2} /> Agregar
         </button>
       </div>
 

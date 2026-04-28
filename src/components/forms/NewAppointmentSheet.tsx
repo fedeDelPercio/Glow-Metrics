@@ -23,15 +23,17 @@ import { SOURCE_CHANNELS } from "@/lib/utils/constants"
 import { useAppointments } from "@/hooks/useAppointments"
 import { useServices } from "@/hooks/useServices"
 import { useClients } from "@/hooks/useClients"
+import { triggerGlobalRefresh } from "@/hooks/useVisibilityRefetch"
 import type { Client } from "@/types/database"
 
 interface NewAppointmentSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultDate?: Date
+  defaultTime?: string
 }
 
-export function NewAppointmentSheet({ open, onOpenChange, defaultDate }: NewAppointmentSheetProps) {
+export function NewAppointmentSheet({ open, onOpenChange, defaultDate, defaultTime }: NewAppointmentSheetProps) {
   const [mode, setMode] = useState<"appointment" | "new-client">("appointment")
   const [clientSearch, setClientSearch] = useState("")
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
@@ -43,16 +45,25 @@ export function NewAppointmentSheet({ open, onOpenChange, defaultDate }: NewAppo
   const { clients, createClient } = useClients(clientSearch)
 
   const today = format(defaultDate ?? new Date(), "yyyy-MM-dd")
+  const initialTime = defaultTime ?? "09:00"
 
   const form = useForm<AppointmentFormValues>({
     resolver: zodResolver(AppointmentSchema) as import("react-hook-form").Resolver<AppointmentFormValues>,
     defaultValues: {
       date: today,
-      start_time: "09:00",
+      start_time: initialTime,
       status: "reserved",
       service_id: "",
     },
   })
+
+  // Re-sync the form when the defaults change while the sheet is opening
+  // (e.g. user clicked a different time slot and re-opened).
+  useEffect(() => {
+    if (open) {
+      form.reset({ date: today, start_time: initialTime, status: "reserved", service_id: "" })
+    }
+  }, [open, today, initialTime]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -80,7 +91,8 @@ export function NewAppointmentSheet({ open, onOpenChange, defaultDate }: NewAppo
     const typedValues = values as AppointmentFormValues
     const result = await createAppointment(typedValues)
     if (result) {
-      form.reset({ date: today, start_time: "09:00", status: "reserved", service_id: "" })
+      triggerGlobalRefresh()
+      form.reset({ date: today, start_time: initialTime, status: "reserved", service_id: "" })
       setSelectedClient(null)
       setClientSearch("")
       onOpenChange(false)
@@ -109,7 +121,7 @@ export function NewAppointmentSheet({ open, onOpenChange, defaultDate }: NewAppo
   }
 
   const activeServices = services.filter((s) => s.is_active && !s.deleted_at)
-  const showResults = showDropdown && clientSearch.trim().length > 0
+  const showResults = showDropdown
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -215,8 +227,8 @@ export function NewAppointmentSheet({ open, onOpenChange, defaultDate }: NewAppo
                   </div>
 
                   {showResults && (
-                    <div className="absolute top-full left-0 right-12 mt-1 border border-[#E5E5E5] rounded-lg bg-white shadow-md z-10 overflow-hidden">
-                      {clients.slice(0, 6).map((c) => (
+                    <div className="absolute top-full left-0 right-12 mt-1 border border-[#E5E5E5] rounded-lg bg-white shadow-md z-10 overflow-hidden max-h-72 overflow-y-auto">
+                      {clients.slice(0, 10).map((c) => (
                         <button
                           key={c.id}
                           type="button"

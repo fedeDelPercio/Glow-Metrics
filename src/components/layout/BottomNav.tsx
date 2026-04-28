@@ -35,7 +35,7 @@ export function BottomNav({ onFabClick }: BottomNavProps) {
           <button
             onClick={onFabClick}
             className="w-14 h-14 bg-[#0A0A0A] rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform"
-            aria-label="Nuevo turno"
+            aria-label="Agregar"
           >
             <Plus className="w-6 h-6 text-white" strokeWidth={2} />
           </button>

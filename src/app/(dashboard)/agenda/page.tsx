@@ -50,6 +50,12 @@ export default function AgendaPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("day")
   const [referenceDate, setReferenceDate] = useState(new Date())
   const [fabOpen, setFabOpen] = useState(false)
+  const [slotDefault, setSlotDefault] = useState<{ date: Date; time: string } | undefined>(undefined)
+
+  const openNewAt = (date: Date, time: string) => {
+    setSlotDefault({ date, time })
+    setFabOpen(true)
+  }
 
   const range = useMemo(() => {
     if (viewMode === "day") return { from: referenceDate, to: referenceDate }
@@ -161,11 +167,17 @@ export default function AgendaPage() {
           appointments={appointments}
           onStatusChange={updateStatus}
           onDayClick={(d) => { setReferenceDate(d); setViewMode("day") }}
+          onSlotClick={openNewAt}
           isWeek={viewMode === "week"}
         />
       )}
 
-      <NewAppointmentSheet open={fabOpen} onOpenChange={setFabOpen} defaultDate={referenceDate} />
+      <NewAppointmentSheet
+        open={fabOpen}
+        onOpenChange={(v) => { setFabOpen(v); if (!v) setSlotDefault(undefined) }}
+        defaultDate={slotDefault?.date ?? referenceDate}
+        defaultTime={slotDefault?.time}
+      />
     </PageContainer>
   )
 }
@@ -203,12 +215,14 @@ function TimeGridView({
   appointments,
   onStatusChange,
   onDayClick,
+  onSlotClick,
   isWeek,
 }: {
   days: Date[]
   appointments: ApptWithDetails[]
   onStatusChange: (id: string, status: AppointmentStatus) => void
   onDayClick: (d: Date) => void
+  onSlotClick: (date: Date, time: string) => void
   isWeek: boolean
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -233,41 +247,42 @@ function TimeGridView({
 
   return (
     <div className="border border-[#E5E5E5] rounded-xl overflow-hidden flex flex-col" style={{ maxHeight: "calc(100vh - 230px)" }}>
-      {/* Sticky header row */}
-      <div className="flex flex-shrink-0 border-b border-[#E5E5E5] bg-white z-20">
-        <div className="w-10 flex-shrink-0" />
-        {days.map((day) => (
-          <button
-            key={format(day, "yyyy-MM-dd")}
-            onClick={() => isWeek && onDayClick(day)}
-            className={cn(
-              "flex-1 py-2 flex flex-col items-center border-l border-[#F0F0F0]",
-              isWeek && "hover:bg-[#FAFAFA] transition-colors"
-            )}
-          >
-            <span className={cn(
-              "text-[10px] uppercase font-medium tracking-wide",
-              isToday(day) ? "text-[#0A0A0A]" : "text-[#A3A3A3]"
-            )}>
-              {format(day, isWeek ? "EEE" : "EEEE", { locale: es })}
-            </span>
-            <span className={cn(
-              "text-sm font-semibold w-7 h-7 flex items-center justify-center rounded-full mt-0.5",
-              isToday(day) ? "bg-[#0A0A0A] text-white" : "text-[#525252]"
-            )}>
-              {format(day, "d")}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {/* Scrollable grid body */}
+      {/* Scrollable grid body (header lives inside as sticky row so columns stay aligned with scrollbar gutter) */}
       <div ref={scrollRef} className="overflow-y-auto overflow-x-auto flex-1">
-        <div className="flex relative" style={{ minWidth: isWeek ? `${days.length * 80 + 40}px` : undefined }}>
-          {/* Hour labels column */}
+        <div className="relative" style={{ minWidth: isWeek ? `${days.length * 80 + 40}px` : undefined }}>
+          {/* Sticky header row — same column layout as body */}
+          <div className="flex sticky top-0 z-20 bg-white border-b border-[#E5E5E5]">
+            <div className="w-10 flex-shrink-0" />
+            {days.map((day) => (
+              <button
+                key={format(day, "yyyy-MM-dd")}
+                onClick={() => isWeek && onDayClick(day)}
+                className={cn(
+                  "flex-1 py-2 flex flex-col items-center border-l border-[#F0F0F0]",
+                  isWeek && "hover:bg-[#FAFAFA] transition-colors"
+                )}
+              >
+                <span className={cn(
+                  "text-[10px] uppercase font-medium tracking-wide",
+                  isToday(day) ? "text-[#0A0A0A]" : "text-[#A3A3A3]"
+                )}>
+                  {format(day, isWeek ? "EEE" : "EEEE", { locale: es })}
+                </span>
+                <span className={cn(
+                  "text-sm font-semibold w-7 h-7 flex items-center justify-center rounded-full mt-0.5",
+                  isToday(day) ? "bg-[#0A0A0A] text-white" : "text-[#525252]"
+                )}>
+                  {format(day, "d")}
+                </span>
+              </button>
+            ))}
+          </div>
+
+        <div className="flex relative">
+          {/* Hour labels column — no grid lines here, only the text */}
           <div className="w-10 flex-shrink-0 relative">
             {hours.map((h) => (
-              <div key={h} style={{ height: PX_PER_HOUR }} className="relative border-b border-[#F5F5F5]">
+              <div key={h} style={{ height: PX_PER_HOUR }} className="relative">
                 <span className="absolute -top-2 right-1.5 text-[10px] text-[#A3A3A3] tabular-nums select-none">
                   {`${String(h).padStart(2, "0")}:00`}
                 </span>
@@ -279,8 +294,24 @@ function TimeGridView({
           {days.map((day) => {
             const key = format(day, "yyyy-MM-dd")
             const dayAppts = byDay[key] ?? []
+            const handleColumnClick = (e: React.MouseEvent<HTMLDivElement>) => {
+              // Ignore clicks on existing appointment blocks (they stop propagation below).
+              const rect = e.currentTarget.getBoundingClientRect()
+              const y = e.clientY - rect.top
+              const minutesFromStart = (y / PX_PER_HOUR) * 60
+              // Snap to 15-minute increments.
+              const snappedMin = Math.round(minutesFromStart / 15) * 15
+              const hh = HOUR_START + Math.floor(snappedMin / 60)
+              const mm = snappedMin % 60
+              if (hh < HOUR_START || hh >= HOUR_END) return
+              onSlotClick(day, `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`)
+            }
             return (
-              <div key={key} className="flex-1 min-w-0 border-l border-[#F0F0F0] relative">
+              <div
+                key={key}
+                onClick={handleColumnClick}
+                className="flex-1 min-w-0 border-l border-[#F0F0F0] relative cursor-pointer hover:bg-[#FAFAFA]/50"
+              >
                 {/* Hour lines */}
                 {hours.map((h) => (
                   <div key={h} style={{ height: PX_PER_HOUR }} className="border-b border-[#F5F5F5]" />
@@ -303,10 +334,11 @@ function TimeGridView({
                       key={appt.id}
                       className="absolute inset-x-0.5 rounded-lg"
                       style={{ top, height, zIndex: 10 }}
+                      onClick={(e) => e.stopPropagation()}
                     >
                       {isWeek ? (
                         <button
-                          onClick={() => onDayClick(day)}
+                          onClick={(e) => { e.stopPropagation(); onDayClick(day) }}
                           className={cn("w-full h-full px-1.5 py-1 text-left rounded-lg overflow-hidden", gridColor)}
                         >
                           <p className="text-[10px] font-medium leading-tight truncate">
@@ -332,6 +364,7 @@ function TimeGridView({
               </div>
             )
           })}
+        </div>
         </div>
       </div>
     </div>
