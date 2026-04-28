@@ -9,7 +9,7 @@ interface AppointmentRecord {
 
 export function calcServiceProfitability(
   service: Service,
-  supplies: (ServiceSupply & { supply_catalog: Pick<SupplyCatalog, "current_stock" | "unit"> | null })[],
+  supplies: (ServiceSupply & { supply_catalog: Pick<SupplyCatalog, "current_stock" | "unit" | "unit_size" | "pack_price"> | null })[],
   purchases: SupplyPurchase[],
   totalFixedCosts: number,
   totalCompletedAppointments: number,
@@ -26,14 +26,25 @@ export function calcServiceProfitability(
     0
   )
 
-  // Costo de insumos por sesión
+  // Costo de insumos por sesión. Preferimos pack_price/unit_size cargado en
+  // el catálogo (la dueña pone el precio del envase y declaramos el costo
+  // por unidad). Si no, fallback al promedio de precios de compras.
   let supplyCostPerSession = 0
   for (const ss of supplies) {
-    const supplyPurchases = purchases.filter((p) => p.supply_id === ss.supply_id)
-    if (supplyPurchases.length > 0) {
-      const avgUnitPrice =
-        supplyPurchases.reduce((sum, p) => sum + p.unit_price, 0) / supplyPurchases.length
-      supplyCostPerSession += ss.quantity_per_session * avgUnitPrice
+    const cat = ss.supply_catalog
+    const packPrice = cat?.pack_price ?? null
+    const unitSize = cat?.unit_size ?? null
+    let unitCost: number | null = null
+    if (packPrice && unitSize && unitSize > 0) {
+      unitCost = packPrice / unitSize
+    } else {
+      const supplyPurchases = purchases.filter((p) => p.supply_id === ss.supply_id)
+      if (supplyPurchases.length > 0) {
+        unitCost = supplyPurchases.reduce((sum, p) => sum + p.unit_price, 0) / supplyPurchases.length
+      }
+    }
+    if (unitCost != null) {
+      supplyCostPerSession += ss.quantity_per_session * unitCost
     }
   }
 

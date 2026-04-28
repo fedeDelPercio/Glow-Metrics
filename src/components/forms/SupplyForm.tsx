@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SupplySchema, type SupplyFormValues } from "@/types/forms"
 import { SUPPLY_UNITS } from "@/lib/utils/constants"
@@ -26,6 +27,7 @@ export function SupplyForm({ defaultValues, onSubmit }: SupplyFormProps) {
       brand: defaultValues?.brand ?? "",
       unit: defaultValues?.unit ?? "",
       unit_size: defaultValues?.unit_size ?? undefined,
+      pack_price: defaultValues?.pack_price ?? undefined,
       min_stock_alert: defaultValues?.min_stock_alert ?? undefined,
     },
   })
@@ -78,6 +80,17 @@ export function SupplyForm({ defaultValues, onSubmit }: SupplyFormProps) {
             {...form.register("unit_size", { setValueAs: (v) => v === "" ? undefined : Number(v) })}
           />
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs uppercase tracking-wide text-[#737373]">Precio del envase</Label>
+        <CurrencyInput
+          value={form.watch("pack_price") ?? 0}
+          onChange={(v) => form.setValue("pack_price", v > 0 ? v : undefined, { shouldValidate: true })}
+        />
+        <p className="text-[10px] text-[#A3A3A3]">
+          Lo usamos para calcular el costo por sesión en cada servicio. Opcional.
+        </p>
       </div>
 
       <div className="space-y-1.5">

@@ -9,7 +9,6 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { CurrencyInput } from "@/components/ui/currency-input"
 import {
   Select,
   SelectContent,
@@ -19,8 +18,7 @@ import {
 } from "@/components/ui/select"
 import { ClientForm } from "@/components/forms/ClientForm"
 import { AppointmentSchema, type AppointmentFormValues } from "@/types/forms"
-import { SOURCE_CHANNELS } from "@/lib/utils/constants"
-import { useAppointments } from "@/hooks/useAppointments"
+import { useAppointments, type AppointmentWithDetails } from "@/hooks/useAppointments"
 import { useServices } from "@/hooks/useServices"
 import { useClients } from "@/hooks/useClients"
 import { triggerGlobalRefresh } from "@/hooks/useVisibilityRefetch"
@@ -31,16 +29,20 @@ interface NewAppointmentSheetProps {
   onOpenChange: (open: boolean) => void
   defaultDate?: Date
   defaultTime?: string
+  // When provided, the sheet switches to edit mode: prefilled form, "Guardar
+  // cambios" submit, and updates the existing record instead of inserting.
+  appointment?: AppointmentWithDetails | null
 }
 
-export function NewAppointmentSheet({ open, onOpenChange, defaultDate, defaultTime }: NewAppointmentSheetProps) {
+export function NewAppointmentSheet({ open, onOpenChange, defaultDate, defaultTime, appointment }: NewAppointmentSheetProps) {
+  const editing = !!appointment
   const [mode, setMode] = useState<"appointment" | "new-client">("appointment")
   const [clientSearch, setClientSearch] = useState("")
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  const { createAppointment } = useAppointments()
+  const { createAppointment, updateAppointment } = useAppointments()
   const { services } = useServices()
   const { clients, createClient } = useClients(clientSearch)
 
@@ -58,12 +60,27 @@ export function NewAppointmentSheet({ open, onOpenChange, defaultDate, defaultTi
   })
 
   // Re-sync the form when the defaults change while the sheet is opening
-  // (e.g. user clicked a different time slot and re-opened).
+  // (e.g. user clicked a different time slot and re-opened, or switched
+  // between create and edit).
   useEffect(() => {
-    if (open) {
+    if (!open) return
+    if (appointment) {
+      form.reset({
+        date: appointment.date,
+        start_time: appointment.start_time.slice(0, 5),
+        status: appointment.status as AppointmentFormValues["status"],
+        service_id: appointment.service_id,
+        client_id: appointment.client_id ?? undefined,
+        notes: appointment.notes ?? undefined,
+        price_charged: appointment.price_charged ?? undefined,
+      })
+      if (appointment.clients) {
+        setSelectedClient(appointment.clients as Client)
+      }
+    } else {
       form.reset({ date: today, start_time: initialTime, status: "reserved", service_id: "" })
     }
-  }, [open, today, initialTime]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, today, initialTime, appointment]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -89,8 +106,15 @@ export function NewAppointmentSheet({ open, onOpenChange, defaultDate, defaultTi
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onSubmit = async (values: any) => {
     const typedValues = values as AppointmentFormValues
-    const result = await createAppointment(typedValues)
-    if (result) {
+    let ok = false
+    if (editing && appointment) {
+      const success = await updateAppointment(appointment.id, typedValues)
+      ok = success
+    } else {
+      const result = await createAppointment(typedValues)
+      ok = !!result
+    }
+    if (ok) {
       triggerGlobalRefresh()
       form.reset({ date: today, start_time: initialTime, status: "reserved", service_id: "" })
       setSelectedClient(null)
@@ -138,7 +162,9 @@ export function NewAppointmentSheet({ open, onOpenChange, defaultDate, defaultTi
               <SheetTitle className="text-base font-semibold">Nueva clienta</SheetTitle>
             </div>
           ) : (
-            <SheetTitle className="text-left text-base font-semibold">Nuevo turno</SheetTitle>
+            <SheetTitle className="text-left text-base font-semibold">
+              {editing ? "Editar turno" : "Nuevo turno"}
+            </SheetTitle>
           )}
         </SheetHeader>
 
@@ -260,26 +286,8 @@ export function NewAppointmentSheet({ open, onOpenChange, defaultDate, defaultTi
               )}
             </div>
 
-            {/* Canal de origen */}
-            <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wide text-[#737373]">¿De dónde viene?</Label>
-              <Select
-                onValueChange={(v) => form.setValue("source", v)}
-                value={form.watch("source") ?? ""}
-              >
-                <SelectTrigger className="h-11">
-                  <SelectValue placeholder="Canal de origen (opcional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SOURCE_CHANNELS.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             <Button type="submit" className="w-full h-11">
-              Guardar turno
+              {editing ? "Guardar cambios" : "Guardar turno"}
             </Button>
           </form>
         )}

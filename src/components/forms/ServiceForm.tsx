@@ -10,10 +10,12 @@ import { Label } from "@/components/ui/label"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ServiceSchema, type ServiceFormValues, type ServiceSupplyFormValues } from "@/types/forms"
 import type { ServiceCategory } from "@/types/database"
 import type { ServiceWithCategory } from "@/hooks/useServices"
 import { useSupplies } from "@/hooks/useSupplies"
+import { SupplyForm } from "@/components/forms/SupplyForm"
 
 interface ServiceFormProps {
   defaultValues?: ServiceWithCategory | null
@@ -21,10 +23,16 @@ interface ServiceFormProps {
   onSubmit: (values: ServiceFormValues, supplies: ServiceSupplyFormValues[]) => Promise<void>
 }
 
+// Sentinel value used by the recipe Select to trigger the "create new supply"
+// flow. Radix Select disallows empty-string values, so we pick something a
+// real UUID will never collide with.
+const CREATE_NEW_SUPPLY = "__create_new_supply__"
+
 export function ServiceForm({ defaultValues, categories, onSubmit }: ServiceFormProps) {
-  const { supplies } = useSupplies()
+  const { supplies, createSupply } = useSupplies()
   const [showRecipe, setShowRecipe] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [creatingSupplyForIndex, setCreatingSupplyForIndex] = useState<number | null>(null)
   const [recipe, setRecipe] = useState<ServiceSupplyFormValues[]>(
     defaultValues?.service_supplies?.map((ss) => ({
       supply_id: ss.supply_id,
@@ -154,7 +162,13 @@ export function ServiceForm({ defaultValues, categories, onSubmit }: ServiceForm
               <div key={index} className="flex items-center gap-2">
                 <Select
                   value={item.supply_id}
-                  onValueChange={(v) => updateRecipeItem(index, "supply_id", v)}
+                  onValueChange={(v) => {
+                    if (v === CREATE_NEW_SUPPLY) {
+                      setCreatingSupplyForIndex(index)
+                    } else {
+                      updateRecipeItem(index, "supply_id", v)
+                    }
+                  }}
                 >
                   <SelectTrigger className="flex-1 h-10 text-sm">
                     <SelectValue placeholder="Insumo" />
@@ -165,6 +179,9 @@ export function ServiceForm({ defaultValues, categories, onSubmit }: ServiceForm
                         {s.name} ({s.unit})
                       </SelectItem>
                     ))}
+                    <SelectItem value={CREATE_NEW_SUPPLY}>
+                      + Crear nuevo insumo
+                    </SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -201,6 +218,26 @@ export function ServiceForm({ defaultValues, categories, onSubmit }: ServiceForm
       <Button type="submit" className="w-full h-11" disabled={loading}>
         {loading ? "Guardando..." : defaultValues ? "Guardar cambios" : "Crear servicio"}
       </Button>
+
+      <Dialog
+        open={creatingSupplyForIndex !== null}
+        onOpenChange={(open) => { if (!open) setCreatingSupplyForIndex(null) }}
+      >
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold">Nuevo insumo</DialogTitle>
+          </DialogHeader>
+          <SupplyForm
+            onSubmit={async (values) => {
+              const created = await createSupply(values)
+              if (created && creatingSupplyForIndex !== null) {
+                updateRecipeItem(creatingSupplyForIndex, "supply_id", created.id)
+              }
+              setCreatingSupplyForIndex(null)
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </form>
   )
 }

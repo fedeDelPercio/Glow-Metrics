@@ -70,6 +70,7 @@ export const SupplySchema = z.object({
   brand: z.string().max(100).optional().nullable(),
   unit: z.string().min(1, "Seleccioná la unidad"),
   unit_size: z.number().positive().optional().nullable(),
+  pack_price: z.number().positive().optional().nullable(),
   min_stock_alert: z.number().positive().optional().nullable(),
 })
 

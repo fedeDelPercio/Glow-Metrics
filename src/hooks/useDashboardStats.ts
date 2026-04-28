@@ -45,7 +45,7 @@ export function useDashboardStats(referenceDate = new Date()) {
       ] = await Promise.all([
         supabase
           .from("appointments")
-          .select("*, services(id, name, price, duration_minutes)")
+          .select("*, services(id, name, price, duration_minutes), clients(source)")
           .eq("user_id", uid)
           .is("deleted_at", null)
           .gte("date", format(periodStart, "yyyy-MM-dd"))
@@ -59,7 +59,7 @@ export function useDashboardStats(referenceDate = new Date()) {
           .lte("date", format(prevEnd, "yyyy-MM-dd"))
           .eq("status", "completed"),
         supabase.from("services").select("*").eq("user_id", uid).is("deleted_at", null),
-        supabase.from("service_supplies").select("*, supply_catalog(current_stock, unit)"),
+        supabase.from("service_supplies").select("*, supply_catalog(current_stock, unit, unit_size, pack_price)"),
         supabase.from("supply_purchases").select("*").eq("user_id", uid).is("deleted_at", null),
         supabase.from("fixed_costs").select("*").eq("user_id", uid).is("deleted_at", null).eq("is_active", true),
       ])
@@ -102,10 +102,13 @@ export function useDashboardStats(referenceDate = new Date()) {
       const topByRevenue = [...servicesProfit].sort((a, b) => b.revenue - a.revenue).slice(0, 5)
       const topByProfit = [...servicesProfit].sort((a, b) => b.margin_pct - a.margin_pct).slice(0, 5)
 
-      // Canales
+      // Canales: leemos el source desde la clienta (nuestra fuente de verdad);
+      // appointments.source quedó como columna histórica. "otro" cuando la
+      // clienta no tiene canal cargado o el turno se anotó sin clienta.
       const channelCounts: Record<string, { count: number; revenue: number }> = {}
       for (const a of completed) {
-        const ch = (a as { source?: string | null }).source ?? "otro"
+        const clientSource = (a as { clients?: { source?: string | null } | null }).clients?.source
+        const ch = clientSource ?? "otro"
         if (!channelCounts[ch]) channelCounts[ch] = { count: 0, revenue: 0 }
         channelCounts[ch].count++
         channelCounts[ch].revenue += (a as { price_charged?: number | null }).price_charged ?? 0

@@ -208,6 +208,7 @@ export type Database = {
           brand: string | null
           unit: string
           unit_size: number | null
+          pack_price: number | null
           current_stock: number
           min_stock_alert: number | null
           created_at: string
@@ -221,6 +222,7 @@ export type Database = {
           brand?: string | null
           unit: string
           unit_size?: number | null
+          pack_price?: number | null
           current_stock?: number
           min_stock_alert?: number | null
           created_at?: string
@@ -234,6 +236,7 @@ export type Database = {
           brand?: string | null
           unit?: string
           unit_size?: number | null
+          pack_price?: number | null
           current_stock?: number
           min_stock_alert?: number | null
           updated_at?: string
